@@ -1,0 +1,46 @@
+# .github/workflows/scraper.yml
+# Daily: scrape -> commit bikes.json -> match watchlist -> upload email drafts
+name: Daily auction scrape
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # midnight UTC daily
+  workflow_dispatch: {}     # manual "Run workflow" button
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests beautifulsoup4
+
+      - name: Run scraper
+        run: python koscom_scraper_v3.py
+
+      - name: Match watchlist & draft outreach (no media in CI)
+        run: python watchlist_outreach.py --no-media
+        continue-on-error: true   # don't fail the data update if watchlist.json absent
+
+      - name: Commit updated data
+        run: |
+          git config user.name "moto2-bot"
+          git config user.email "actions@github.com"
+          git add bikes.json notified.json outreach/ || true
+          git diff --staged --quiet || git commit -m "Daily auction data $(date -u +%F)"
+          git push
+
+      - name: Upload email drafts as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: outreach-drafts
+          path: outreach/
+          if-no-files-found: ignore

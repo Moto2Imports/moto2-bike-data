@@ -1,0 +1,226 @@
+{
+  "models": [
+    {
+      "make": "Honda",
+      "model": "CBR250RR",
+      "vin_prefix": "MC22",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "CRM250R"
+    },
+    {
+      "make": "Honda",
+      "model": "CRM250AR"
+    },
+    {
+      "make": "Honda",
+      "model": "NS400R"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-3"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-4"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-4SE"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-4SP"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-5"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-5SE"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-5SP"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR50"
+    },
+    {
+      "make": "Honda",
+      "model": "NSR80"
+    },
+    {
+      "make": "Honda",
+      "model": "RVF400"
+    },
+    {
+      "make": "Honda",
+      "model": "VFR400R-2"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR-1"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR-1S"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR-1R"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KSR-2"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "ZXR400-1"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "ZXR400-2"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "ZXR400R"
+    },
+    {
+      "make": "Kawasaki",
+      "model": "ZXR400R-2"
+    },
+    {
+      "make": "Suzuki",
+      "model": "GAG"
+    },
+    {
+      "make": "Suzuki",
+      "model": "GSX-R400R"
+    },
+    {
+      "make": "Suzuki",
+      "model": "RG400"
+    },
+    {
+      "make": "Suzuki",
+      "model": "RG500"
+    },
+    {
+      "make": "Suzuki",
+      "model": "RGV250"
+    },
+    {
+      "make": "Yamaha",
+      "model": "DT125"
+    },
+    {
+      "make": "Yamaha",
+      "model": "DT200R"
+    },
+    {
+      "make": "Yamaha",
+      "model": "DT200WR"
+    },
+    {
+      "make": "Yamaha",
+      "model": "FZR250"
+    },
+    {
+      "make": "Yamaha",
+      "model": "FZR250R-1"
+    },
+    {
+      "make": "Yamaha",
+      "model": "FZR250R-2"
+    },
+    {
+      "make": "Yamaha",
+      "model": "FZR400-1"
+    },
+    {
+      "make": "Yamaha",
+      "model": "FZR400-2"
+    },
+    {
+      "make": "Yamaha",
+      "model": "FZR400R"
+    },
+    {
+      "make": "Yamaha",
+      "model": "FZR400RR"
+    },
+    {
+      "make": "Yamaha",
+      "model": "R-1Z"
+    },
+    {
+      "make": "Yamaha",
+      "model": "RZ250"
+    },
+    {
+      "make": "Yamaha",
+      "model": "RZ350"
+    },
+    {
+      "make": "Yamaha",
+      "model": "RZV500R"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TDR125"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TDR250"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZM50R"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR125R"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250-1"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250-3"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250-4"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250R"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250RS"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250SP"
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250SPR"
+    },
+    {
+      "make": "Yamaha",
+      "model": "YSR50"
+    },
+    {
+      "make": "Yamaha",
+      "model": "YSR80"
+    }
+  ]
+}
