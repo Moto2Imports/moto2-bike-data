@@ -60,6 +60,15 @@ You (manual, when needed)
 
 - Nothing is hardcoded: auction house, VIN, mileage, price, grades, dates,
   media URLs are all extracted from the listing page. Missing = 0/"Unknown".
+- **`year`** is extracted from the sheet's Japanese-era registration date
+  (e.g. 平成7年 / "H7" → 1995) and emitted as a plain Gregorian integer, or
+  `null` when it can't be found (the site renders `null` as "N/A"). Era math:
+  Showa = 1925+n, Heisei = 1988+n, Reiwa = 2018+n. The Showa-64/Heisei-1 (and
+  Heisei-31/Reiwa-1) boundaries collapse to the same Gregorian year, so no
+  month is needed. See `koscom_scraper_v3.py` (`extract_year`) and
+  `test_year_extraction.py`. ⚠️ The exact year-row label/format was written
+  against the known sheet vocabulary but **not** confirmed on live markup —
+  verify with `python3 koscom_scraper_v3.py --model CBR250RR`.
 - Outreach is **draft-first**. `--send` requires SMTP env vars
   (`MOTO2_SMTP_HOST/PORT/USER/PASS`, `MOTO2_FROM_EMAIL`). If sending through
   Google Workspace, use an app password and keep volume modest to protect the
