@@ -54,6 +54,103 @@ SEARCH_TIMEOUT = 15
 GENERIC_VIN_RE = re.compile(r"\b([A-Z]{1,4}\d{1,3}[A-Z]?)-(\d{3,8})\b")
 
 
+# ---------------------------------------------------------- year extraction --
+# BDS/koscom inspection sheets record the model year as a Japanese imperial-era
+# date (e.g. 平成7年 / "H7", 昭和63年 / "S63", 令和2年 / "R2"), not a Gregorian
+# year. The site's `year` field wants a plain Gregorian integer, so convert:
+#
+#   Showa  (昭和 / S) = 1925 + n   (S64 = 1989)
+#   Heisei (平成 / H) = 1988 + n   (H1  = 1989, H31 = 2019)
+#   Reiwa  (令和 / R) = 2018 + n   (R1  = 2019)  — rare given the 25y cutoff
+#
+# Showa-64 / Heisei-1 boundary (Jan 1-7 vs Jan 8+, 1989): it does NOT affect the
+# Gregorian YEAR — S64 and H1 are both 1989 (as are H31 and R1, both 2019) — so
+# no month is needed to compute `year`. A month would only pin the era *label*,
+# which is not emitted. Missing/unparseable → None (JSON null → site "N/A"),
+# consistent with the "never invent a value" rule.
+#
+# NOTE: the exact sheet label/markup for the year row could not be confirmed
+# against a live listing (the auction site is unreachable from this env and the
+# repo ships no HTML fixture). Extraction is written against the known sheet
+# vocabulary + the existing td.bkth spec-table structure and MUST be verified on
+# a live run: `python3 koscom_scraper_v3.py --model CBR250RR`.
+ERA_BASE = {"S": 1925, "H": 1988, "R": 2018,
+            "昭和": 1925, "平成": 1988, "令和": 2018}
+
+# Highest valid year-number per era (Showa ended year 64, Heisei year 31, Reiwa
+# is ongoing). Bounds the era number so a stray "S99" can't parse to a year.
+ERA_MAX = {"S": 64, "H": 31, "昭和": 64, "平成": 31}
+
+ERA_KANJI_RE = re.compile(r"(昭和|平成|令和)\s*(元|\d{1,2})\s*年?")
+ERA_ABBR_RE = re.compile(r"\b([SHR])\.?\s*(\d{1,2})\b")
+GREGORIAN_YEAR_RE = re.compile(r"\b(19[5-9]\d|20[0-2]\d)\b")
+
+# Spec-table labels that carry the model year / first-registration date. Covers
+# koscom's English-ish labels (the grade labels render as "engine", "frame"...)
+# and the Japanese sheet vocabulary. Grade-row labels never contain these, so
+# there is no collision with the condition-grade table.
+YEAR_LABELS = ("year", "model year", "registration", "first registration",
+               "年式", "初度登録", "初度", "登録年月", "登録")
+
+
+def _era_number(token):
+    """'元' (first year) -> 1; otherwise the integer value."""
+    return 1 if token == "元" else int(token)
+
+
+def era_to_gregorian(era, n):
+    """Convert an era code + number to a Gregorian year, or None if out of range.
+    Rejects nonsense era numbers (e.g. 'S99') via each era's real span and a
+    final clamp at the current year (Reiwa is open-ended)."""
+    base = ERA_BASE.get(era)
+    if base is None or n < 1:
+        return None
+    # Reiwa has no ERA_MAX entry (ongoing) — the year clamp below bounds it.
+    if era in ERA_MAX and n > ERA_MAX[era]:
+        return None
+    year = base + n
+    return year if 1955 <= year <= datetime.now().year else None
+
+
+def parse_year_from_value(text):
+    """Parse a spec-cell value holding a model year: kanji era (平成7年),
+    abbreviated era (H7 / S63 / R2), or a bare Gregorian year (1995)."""
+    if not text:
+        return None
+    for regex in (ERA_KANJI_RE, ERA_ABBR_RE):
+        m = regex.search(text)
+        if m:
+            year = era_to_gregorian(m.group(1), _era_number(m.group(2)))
+            if year:
+                return year
+    m = GREGORIAN_YEAR_RE.search(text)
+    return int(m.group(1)) if m else None
+
+
+def parse_year_from_text(text):
+    """Whole-page fallback. Only the unambiguous kanji-era form is trusted here;
+    a bare 'H7'/'S63' or 4-digit number would collide with VINs, grades, the
+    auction date, etc. elsewhere on the page."""
+    m = ERA_KANJI_RE.search(text or "")
+    if m:
+        return era_to_gregorian(m.group(1), _era_number(m.group(2)))
+    return None
+
+
+def extract_year(soup, page_text):
+    """Model year as a Gregorian int, or None. Prefers the spec-table year row
+    (same td.bkth structure the grades use); falls back to a kanji-era scan."""
+    for label_td in soup.find_all("td", class_="bkth"):
+        label = label_td.get_text(" ", strip=True).lower()
+        if any(k in label for k in YEAR_LABELS):
+            value_td = label_td.find_next_sibling("td")
+            if value_td:
+                year = parse_year_from_value(value_td.get_text(" ", strip=True))
+                if year:
+                    return year
+    return parse_year_from_text(page_text)
+
+
 def load_models(path="models.json"):
     if not os.path.exists(path):
         print(f"[FATAL] {path} not found. Create it with your 56-model list.")
@@ -167,6 +264,9 @@ class KoscomScraperV3:
         if dm:
             auction_date = dm.group(1).replace("/", "-")
 
+        # ---- Model year (Japanese era → Gregorian int; None if not found)
+        year = extract_year(soup, page_text)
+
         # ---- Condition grades (extracted; 0 = not found on page)
         condition_grades = {k: 0 for k in
                             ("general", "frame", "engine", "electro",
@@ -218,6 +318,7 @@ class KoscomScraperV3:
             "id": f"{slugify(make)}-{slugify(model)}-{listing_id}",
             "make": make,
             "model": model,
+            "year": year,
             "vin": vin,
             "mileage": mileage,
             "price": price,
