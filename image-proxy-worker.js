@@ -12,9 +12,12 @@
  *   - Built-in edge cache means each photo is fetched from Japan once,
  *     then served from CDN — fast for your US customers.
  *
- * Deploy: dash.cloudflare.com -> Workers -> Create -> paste this -> Deploy.
+ * Deploy: `npx wrangler deploy` (see wrangler.toml), or dash.cloudflare.com ->
+ * Workers -> Create -> paste this -> Deploy.
  * Usage in widget:
  *   https://YOUR-WORKER.workers.dev/?url=<encodeURIComponent(photoUrl)>
+ * After deploying, set that origin (no trailing `/?url=`) as `imageProxyUrl` in
+ * moto2-site's src/config/data-source.ts to route listing media through it.
  */
 
 const ALLOWED_HOSTS = new Set([
@@ -23,7 +26,8 @@ const ALLOWED_HOSTS = new Set([
 ]);
 
 function hostAllowed(host) {
-  return ALLOWED_HOSTS.has(host) || /^\d+\.ajes\.com$/.test(host);
+  // Numbered-subdomain hero CDNs: N.ajes.com and N.tru.ru (whole-bike shots).
+  return ALLOWED_HOSTS.has(host) || /^\d+\.(ajes\.com|tru\.ru)$/.test(host);
 }
 
 export default {
