@@ -49,9 +49,29 @@ MAX_PAGES_PER_MODEL = 20          # safety cap
 REQUEST_DELAY_SECONDS = 1.0       # be polite; this runs once a day
 SEARCH_TIMEOUT = 15
 
-# Generic JDM frame-number pattern (e.g. MC22-1053594, 3MA-021xxx, NC30-10x).
-# Used only when models.json doesn't supply a vin_prefix.
-GENERIC_VIN_RE = re.compile(r"\b([A-Z]{1,4}\d{1,3}[A-Z]?)-(\d{3,8})\b")
+# Generic JDM frame-number pattern (PREFIX-serial), used when models.json has
+# no vin_prefix. The prefix is 2-6 alphanumerics that must contain BOTH a letter
+# and a digit, so it matches:
+#   - letter-leading codes: MC22-, MD24-, NC30-, VJ23A-, MX080B-, ZX400L- …
+#   - digit-leading Yamaha codes: 3XV-, 4L3-, 2KR-, 1WG-, 3MA- …  (the old
+#     `[A-Z]{1,4}\d…` form required a leading letter and silently missed ALL
+#     Yamahas, whose model codes start with a digit)
+# The letter+digit requirement excludes non-VIN text: all-digit dates/lot
+# numbers ("2026-07-15", "07-15"), pure-letter tokens ("ABC-1234"), and the
+# serial's `\d{3,8}` rejects model strings like "TZR250-3" / "KR-1S".
+GENERIC_VIN_RE = re.compile(
+    r"\b(?=[A-Z0-9]{2,6}-\d)"      # shape gate: 2-6 alnum, hyphen, digit
+    r"(?=[A-Z0-9]*[A-Z])"          # prefix contains >=1 letter
+    r"(?=[A-Z0-9]*\d)"             # prefix contains >=1 digit
+    r"([A-Z0-9]{2,6})-(\d{3,8})\b"
+)
+
+
+def extract_generic_vin(page_text):
+    """First PREFIX-serial frame number in the page, or None. Used when the
+    model has no configured vin_prefix (see GENERIC_VIN_RE)."""
+    m = GENERIC_VIN_RE.search(page_text)
+    return f"{m.group(1)}-{m.group(2)}" if m else None
 
 
 # ---------------------------------------------------------- year extraction --
@@ -233,9 +253,7 @@ class KoscomScraperV3:
                 print(f"[SKIP] {listing_id}: no VIN matching prefix {vin_prefix}")
                 return None
         else:
-            m = GENERIC_VIN_RE.search(page_text)
-            if m:
-                vin = f"{m.group(1)}-{m.group(2)}"
+            vin = extract_generic_vin(page_text) or "Unknown"
 
         # ---- Mileage: take the LARGEST km figure on the page. Detail pages
         # sometimes show partial/odometer-note numbers; the true total is the
