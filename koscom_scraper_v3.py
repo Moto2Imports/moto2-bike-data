@@ -26,6 +26,7 @@ Output: bikes.json (same schema your widget already consumes).
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -38,6 +39,7 @@ from bs4 import BeautifulSoup
 
 from koscom_common import (
     KOSCOM_BASE_URL,
+    MEDIA_HEADERS,
     extract_photos,
     extract_videos,
     listing_id_from_url,
@@ -169,6 +171,68 @@ def extract_year(soup, page_text):
                 if year:
                     return year
     return parse_year_from_text(page_text)
+
+
+# --------------------------------------------------------- photo filtering --
+# Auction photos arrive as a fixed 33-slot set: a 9-slot hero grid on the
+# tru.ru / ajes CDNs (whole-bike shots ~1-6, accessory/extra ~7-9) followed by
+# 24 bdsc inspection slots (~10-33). Unused slots hold placeholders, confirmed
+# by fingerprint across many live listings:
+#   * hero blank  — HTTP 200, exactly 2228 bytes (sha256 7bd8e2ebc926…)
+#   * inspection  — HTTP 404 (bdsc "not yet inspected"), before the sheet lands
+# Placeholders are detected by fetched CONTENT, not slot position (a real photo
+# can land in an unexpected slot). Survivors are ordered whole-bike →
+# inspection → any real accessory shots last.
+HERO_BLANK_SIZE = 2228
+HERO_BLANK_SHA_PREFIX = "7bd8e2ebc926"
+_HERO_HOST_RE = re.compile(r"^\d+\.(?:tru\.ru|ajes\.com)$")
+
+
+def _photo_host(url):
+    parts = url.split("/")
+    return parts[2] if len(parts) > 2 else ""
+
+
+def is_hero_photo(url):
+    """True for whole-bike / accessory hero-grid shots (tru.ru / ajes CDNs);
+    False for bdsc inspection shots."""
+    return bool(_HERO_HOST_RE.match(_photo_host(url)))
+
+
+def is_placeholder_photo(session, url):
+    """Fetch-check a photo URL: True when it's an unpopulated placeholder — a
+    bdsc 404 inspection slot, or the 2228-byte hero blank. HEAD first; only GET
+    when a blank is suspected or HEAD is unsupported. Network errors → False
+    (keep it — a transient blip must never drop a real image)."""
+    try:
+        h = session.head(url, headers=MEDIA_HEADERS, timeout=12, allow_redirects=True)
+        if h.status_code == 404:
+            return True
+        if h.status_code not in (403, 405, 501):  # HEAD is supported
+            clen = h.headers.get("Content-Length")
+            if clen is not None and int(clen) != HERO_BLANK_SIZE:
+                return False  # real: not a 404, and not the tiny hero blank
+        # HEAD unsupported / no Content-Length / size == blank → confirm via GET
+        g = session.get(url, headers=MEDIA_HEADERS, timeout=15)
+        if g.status_code == 404:
+            return True
+        body = g.content
+        return (len(body) == HERO_BLANK_SIZE
+                and hashlib.sha256(body).hexdigest().startswith(HERO_BLANK_SHA_PREFIX))
+    except Exception:
+        return False
+
+
+def filter_and_order_photos(photos, is_placeholder):
+    """Drop placeholders and order survivors: whole-bike hero shots (first 6
+    hero) → inspection shots (bdsc) → any remaining hero/accessory shots last.
+    `is_placeholder(url) -> bool` is injected so the ordering is unit-testable.
+    Ordering keys on host, not slot index, so it survives odd photo counts."""
+    kept = [u for u in photos if not is_placeholder(u)]
+    hero = [u for u in kept if is_hero_photo(u)]
+    inspection = [u for u in kept if not is_hero_photo(u)]
+    whole_bike, accessory = hero[:6], hero[6:]
+    return whole_bike + inspection + accessory
 
 
 def load_models(path="models.json"):
@@ -329,7 +393,10 @@ class KoscomScraperV3:
                 note_sections.append(f"{category} — " + "; ".join(items))
         inspection_notes = " | ".join(note_sections)
 
-        photos = extract_photos(html)
+        photos = filter_and_order_photos(
+            extract_photos(html),
+            lambda u: is_placeholder_photo(self.session, u),
+        )
         videos = extract_videos(html)
 
         bike = {
