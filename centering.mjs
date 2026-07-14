@@ -119,18 +119,11 @@ export function computeCrop(frame, opts = {}) {
   const border = Math.max(1, Math.round(Math.min(w, h) * o.borderFrac));
   const bg = estimateBackground(data, w, h, border);
 
-  const skip = (reason, foregroundFraction = 0, bbox = null) => ({
-    centered: false,
-    reason,
-    crop: null,
-    bbox,
-    background: bg,
-    foregroundFraction,
-  });
-
-  if (bg.mad > o.maxBorderMad) return skip("busy-background");
-
-  // Foreground projection onto rows/cols.
+  // Always measure foreground first, so EVERY decision (including the skips)
+  // reports a real foreground fraction and bbox — never a placeholder 0.000.
+  // (Note: when the border isn't plain, `bg` is an unreliable reference, so a
+  // busy-background photo's fraction is noisy; it's reported for insight, not
+  // trusted for the crop.)
   const rowCount = new Array(h).fill(0);
   const colCount = new Array(w).fill(0);
   let fg = 0;
@@ -145,10 +138,8 @@ export function computeCrop(frame, opts = {}) {
     }
   }
   const frac = fg / (w * h);
-  if (frac < o.minForeground) return skip("empty", frac);
-  if (frac > o.maxForeground) return skip("fills-frame", frac);
 
-  // Occupied span = first/last row/col above the coverage threshold.
+  // Occupied span = first/last row/col above the coverage threshold → bbox.
   const rowThresh = o.occupancyFrac * w;
   const colThresh = o.occupancyFrac * h;
   const first = (arr, t) => {
@@ -163,18 +154,41 @@ export function computeCrop(frame, opts = {}) {
   const y1 = last(rowCount, rowThresh);
   const x0 = first(colCount, colThresh);
   const x1 = last(colCount, colThresh);
-  if (x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0) return skip("degenerate", frac);
+  const degenerate = x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0;
+  const bboxFrac = degenerate
+    ? null
+    : { x: x0 / w, y: y0 / h, width: (x1 - x0 + 1) / w, height: (y1 - y0 + 1) / h };
 
-  const bboxFrac = {
-    x: x0 / w,
-    y: y0 / h,
-    width: (x1 - x0 + 1) / w,
-    height: (y1 - y0 + 1) / h,
-  };
+  // Common result shell — carries the measured fraction + bbox on every path.
+  const result = (centered, reason, detail, crop = null) => ({
+    centered,
+    reason,
+    detail,
+    crop,
+    bbox: bboxFrac,
+    background: bg,
+    foregroundFraction: frac,
+  });
+
+  // --- Decisions (order matters). Thresholds unchanged; each explains itself.
+  if (bg.mad > o.maxBorderMad) {
+    // Border ring isn't uniform → not a plain studio backdrop → bg estimate
+    // can't be trusted. A safety-valve DECISION (not "zero foreground found").
+    return result(false, "busy-background", `borderMAD ${bg.mad.toFixed(1)} > ${o.maxBorderMad}`);
+  }
+  if (frac < o.minForeground) {
+    return result(false, "empty", `foreground ${frac.toFixed(3)} < ${o.minForeground}`);
+  }
+  if (frac > o.maxForeground) {
+    return result(false, "fills-frame", `coverage ${frac.toFixed(3)} > ${o.maxForeground}`);
+  }
+  if (degenerate) {
+    return result(false, "degenerate", "no row/col span above occupancy threshold");
+  }
 
   // Pad the bbox (in pixel space), then grow to the target aspect.
-  let bw = x1 - x0 + 1;
-  let bh = y1 - y0 + 1;
+  const bw = x1 - x0 + 1;
+  const bh = y1 - y0 + 1;
   const cx = (x0 + x1 + 1) / 2;
   const cy = (y0 + y1 + 1) / 2;
   let cw = bw * (1 + 2 * o.padFrac);
@@ -182,9 +196,12 @@ export function computeCrop(frame, opts = {}) {
   if (cw / ch < o.targetAspect) cw = ch * o.targetAspect;
   else ch = cw / o.targetAspect;
 
-  // The desired crop exceeds the frame in some dimension → the bike already
-  // (nearly) fills it; recentering can't add context, so leave it alone.
-  if (cw > w || ch > h) return skip("fills-frame", frac, bboxFrac);
+  // The padded, aspect-fitted crop exceeds the frame → the bike already spans
+  // it, so no smaller centered crop of the target aspect fits. Leave it alone.
+  if (cw > w || ch > h) {
+    const over = [cw > w ? "width" : null, ch > h ? "height" : null].filter(Boolean).join("+");
+    return result(false, "fills-frame", `crop ${Math.round(cw)}x${Math.round(ch)} exceeds ${w}x${h} (${over})`);
+  }
 
   // Center on the bbox center, then clamp the window inside the frame.
   let rx = cx - cw / 2;
@@ -192,12 +209,10 @@ export function computeCrop(frame, opts = {}) {
   rx = Math.max(0, Math.min(w - cw, rx));
   ry = Math.max(0, Math.min(h - ch, ry));
 
-  return {
-    centered: true,
-    reason: "centered",
-    crop: { x: rx / w, y: ry / h, width: cw / w, height: ch / h },
-    bbox: bboxFrac,
-    background: bg,
-    foregroundFraction: frac,
-  };
+  return result(
+    true,
+    "centered",
+    `shifted ~${(Math.abs(0.5 - (rx + cw / 2) / w) * 100).toFixed(0)}% from frame center`,
+    { x: rx / w, y: ry / h, width: cw / w, height: ch / h },
+  );
 }

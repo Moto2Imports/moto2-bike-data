@@ -107,6 +107,9 @@ describe("computeCrop — misfire safety valve", () => {
     const r = computeCrop(f);
     expect(r.centered).toBe(false);
     expect(r.reason).toBe("busy-background");
+    // Transparency: the fraction is really measured now, not a placeholder 0.
+    expect(r.foregroundFraction).toBeGreaterThan(0);
+    expect(r.detail).toMatch(/borderMAD/);
   });
 
   it("skips when the subject already fills the frame", () => {
@@ -114,5 +117,17 @@ describe("computeCrop — misfire safety valve", () => {
     const r = computeCrop(f);
     expect(r.centered).toBe(false);
     expect(["fills-frame", "empty"]).toContain(r.reason);
+  });
+
+  it("reports a real foreground fraction and detail on fills-frame (crop-exceeds)", () => {
+    // A large, centered subject spanning most of the frame → the ~50% case:
+    // fg is well under maxForeground, but the padded/aspect crop exceeds the
+    // frame, so it skips with a legible detail rather than a bare label.
+    const f = frame(200, 125, GRAY, [{ x0: 10, y0: 10, x1: 190, y1: 115, color: DARK }]);
+    const r = computeCrop(f);
+    expect(r.reason).toBe("fills-frame");
+    expect(r.foregroundFraction).toBeGreaterThan(0.2);
+    expect(r.detail).toMatch(/exceeds|coverage/);
+    expect(r.bbox).not.toBeNull(); // bbox still reported so the overlay can draw it
   });
 });

@@ -75,16 +75,25 @@ node verify-centering.mjs --listings 8
 node verify-centering.mjs "https://7.tru.ru/imgs/…" ./some-photo.jpg
 ```
 
-For each photo it writes to `verify-out/`:
+For each photo (including skips — the original is always written so you can
+judge the call yourself) it writes to `verify-out/`:
 
-- `*-before.jpg` — the original
+- `*-original.jpg` — the untouched original
 - `*-detect.jpg` — original with **green** = detected bbox, **red** = recenter window
-- `*-after.jpg` — the final centered + enhanced result
+- `*-after.jpg` — the final result (centered + enhanced, or enhance-only on a skip)
+- `*-montage.jpg` — original ∣ detect ∣ after in one image, for quick eyeballing
 
-and prints a table (`decision`, `reason`, foreground fraction, background MAD).
-Open the `*-detect.jpg` / `*-after.jpg` and **flag any where centering looks
+and prints a table with `decision`, `reason`, a human-readable `detail`, the
+measured `foreground` fraction, and background `MAD` (border "plainness"). The
+foreground fraction is a real measurement on every row — including skips — not a
+placeholder. Open each `*-montage.jpg` and **flag any where centering looks
 wrong** — those are candidates to special-case (drop the `center` flag for that
 listing in moto2-site) or to tune the `DEFAULTS` thresholds.
+
+Skip reasons: `busy-background` (border not plain → bg estimate untrustworthy),
+`empty` (almost no foreground), `fills-frame` (subject already spans the frame —
+either coverage > 90%, or the padded/target-aspect crop wouldn't fit), and
+`degenerate`.
 
 > Fetching the real hosts (`*.tru.ru`, `*.ajes.com`, `bdsc.jupiter.ac`) needs
 > network egress to them; run this where that egress is allowed.
