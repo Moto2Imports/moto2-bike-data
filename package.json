@@ -1,0 +1,20 @@
+{
+  "name": "moto2-image-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker media proxy for Moto2 Imports: hotlink bypass + photo enhancement + whole-bike auto-centering.",
+  "main": "image-proxy-worker.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "verify": "node verify-centering.mjs --listings 8",
+    "test": "vitest run centering.test.mjs"
+  },
+  "dependencies": {
+    "@cf-wasm/photon": "^0.3.7"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8",
+    "wrangler": "^3.0.0"
+  }
+}

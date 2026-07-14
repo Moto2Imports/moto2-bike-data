@@ -1,8 +1,16 @@
 # Cloudflare Worker config for the listing-media proxy (image-proxy-worker.js).
-# Deploy:  npx wrangler deploy
+# Deploy:  npm install && npx wrangler deploy
 # The deployed URL will be https://moto2-image-proxy.<your-subdomain>.workers.dev
 # Put that origin (no trailing "/?url=") into moto2-site's
 # src/config/data-source.ts `imageProxyUrl` to route photos/videos through it.
+#
+# The worker now enhances photos and auto-centers whole-bike shots (?center=1)
+# using Photon (WASM); Wrangler bundles the WASM automatically. See IMAGE_PROXY.md.
+#
+# PLAN NOTE: the image transform path decodes images in-worker, which needs the
+# Workers **Paid** plan (the free plan's 10ms CPU limit is too low). The plain
+# proxy / pass-through path (and any failed/oversized transform) still works on
+# any plan — it falls back to streaming the original bytes.
 
 name = "moto2-image-proxy"
 main = "image-proxy-worker.js"
@@ -10,3 +18,7 @@ compatibility_date = "2026-07-13"
 
 # Serve on the free *.workers.dev subdomain (no custom domain / bindings needed).
 workers_dev = true
+
+# Optional: raise the CPU ceiling for cold (uncached) image transforms.
+# [limits]
+# cpu_ms = 200
