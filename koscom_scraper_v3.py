@@ -13,8 +13,11 @@ Fixes vs v2:
     extracted from the listing page. Fields that can't be found are set to
     explicit "Unknown"/0 sentinels — never invented.
   * VIN: uses per-model vin_prefix from models.json when provided; otherwise
-    a generic JDM frame-number pattern. Verify the generic pattern against a
-    couple of live listings for each new model you enable.
+    a generic JDM frame-number pattern. A configured prefix that finds no match
+    (e.g. a pre-inspection lot whose frame number isn't on the page yet) yields
+    "Unknown" and the lot is KEPT, never dropped — same as any no-prefix model.
+    Verify the generic pattern against a couple of live listings for each new
+    model you enable.
   * BDS-ONLY filter retained.
   * Photos/videos extracted ordered + deduped via koscom_common.
 
@@ -74,6 +77,22 @@ def extract_generic_vin(page_text):
     model has no configured vin_prefix (see GENERIC_VIN_RE)."""
     m = GENERIC_VIN_RE.search(page_text)
     return f"{m.group(1)}-{m.group(2)}" if m else None
+
+
+def resolve_vin(page_text, vin_prefix):
+    """Resolve a listing's VIN/frame number to a string — never None, so the
+    caller never has to drop a listing over a missing VIN.
+
+    With a configured `vin_prefix` (e.g. CBR250RR -> "MC22"): return the exact
+    "PREFIX-serial" when the page shows one, otherwise "Unknown". A miss is
+    expected for pre-inspection lots — the frame number only appears once the
+    inspection sheet lands — so the lot is kept as "Unknown" rather than
+    discarded, exactly like every model without a vin_prefix. Without a
+    vin_prefix, fall back to the generic JDM frame pattern, then "Unknown"."""
+    if vin_prefix:
+        m = re.search(rf"\b{re.escape(vin_prefix)}-(\d{{3,8}})\b", page_text)
+        return f"{vin_prefix}-{m.group(1)}" if m else "Unknown"
+    return extract_generic_vin(page_text) or "Unknown"
 
 
 # ---------------------------------------------------------- year extraction --
@@ -307,17 +326,12 @@ class KoscomScraperV3:
         else:
             auction_house = re.sub(r"\s+", " ", house_match.group(0)).strip()
 
-        # ---- VIN
-        vin = "Unknown"
-        if vin_prefix:
-            m = re.search(rf"\b{re.escape(vin_prefix)}-(\d{{3,8}})\b", page_text)
-            if m:
-                vin = f"{vin_prefix}-{m.group(1)}"
-            else:
-                print(f"[SKIP] {listing_id}: no VIN matching prefix {vin_prefix}")
-                return None
-        else:
-            vin = extract_generic_vin(page_text) or "Unknown"
+        # ---- VIN. A configured vin_prefix that doesn't match keeps the listing
+        # as "Unknown" (typical of a pre-inspection lot with no frame number on
+        # the page yet) instead of dropping it — see resolve_vin.
+        vin = resolve_vin(page_text, vin_prefix)
+        if vin_prefix and vin == "Unknown":
+            print(f"[VIN?] {listing_id}: no {vin_prefix} frame number on page yet — keeping as Unknown")
 
         # ---- Mileage: take the LARGEST km figure on the page. Detail pages
         # sometimes show partial/odometer-note numbers; the true total is the

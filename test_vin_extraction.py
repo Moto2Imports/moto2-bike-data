@@ -10,7 +10,7 @@ strings) so the wider prefix doesn't start false-matching non-VIN page text.
 
     python3 test_vin_extraction.py
 """
-from koscom_scraper_v3 import extract_generic_vin
+from koscom_scraper_v3 import extract_generic_vin, resolve_vin
 
 # Real codes seen in bikes.json (Honda/Suzuki/Kawasaki) + representative
 # digit-leading Yamaha codes. Serials are illustrative for the Yamahas (their
@@ -87,6 +87,37 @@ def test_date_before_vin_is_skipped_vin_still_found():
 def test_missing_returns_none():
     assert extract_generic_vin("no frame number anywhere here") is None
     assert extract_generic_vin("") is None
+
+
+# ---- resolve_vin: pre-inspection lots are KEPT as "Unknown", never dropped ----
+
+def test_resolve_vin_prefix_match_returns_exact_frame_number():
+    text = "Honda CBR250RR · Frame No. MC22-1101961 · grade 4"
+    assert resolve_vin(text, "MC22") == "MC22-1101961"
+
+
+def test_resolve_vin_prefix_no_match_keeps_as_unknown_not_dropped():
+    # Pre-inspection CBR250RR: no frame number on the page yet. This is the
+    # regression fix — before, this returned None and the caller dropped the
+    # whole listing. It must now resolve to "Unknown" (a real, buyable lot).
+    text = "Honda CBR250RR · auction 2026-07-22 · not yet inspected · 6 photos"
+    assert resolve_vin(text, "MC22") == "Unknown"
+
+
+def test_resolve_vin_prefix_ignores_a_different_prefix_on_the_page():
+    # A stray NC30 code must not satisfy an MC22 prefix; still kept as Unknown.
+    text = "some NC30-1013851 reference but this is an MC22 model listing"
+    assert resolve_vin(text, "MC22") == "Unknown"
+
+
+def test_resolve_vin_no_prefix_uses_generic_pattern():
+    text = "Frame 3XV-012345 · mileage 12,477 km"
+    assert resolve_vin(text, None) == "3XV-012345"
+
+
+def test_resolve_vin_no_prefix_no_match_is_unknown():
+    assert resolve_vin("no frame number here", None) == "Unknown"
+    assert resolve_vin("no frame number here", "") == "Unknown"  # falsy prefix → generic path
 
 
 if __name__ == "__main__":
