@@ -1,5 +1,5 @@
 {
-  "_comment": "Scraper search targets. `model` is the exact koscom search string AND the raw feed name written to bikes.json (moto2-site/data/model-lookup.json is keyed on it). `display_name` is informational only — it records the intended site label; the scraper does NOT use it. Display/trim/chassis naming is resolved site-side from model-lookup.json + the VIN prefix, NOT here. No `vin_prefix` hard filter is set (VIN prefixes are shared across sub-generations; the search string disambiguates). `vin_serial_max` {prefix,max} is the one exception: a soft serial upper bound (e.g. Honda HORNET250 keeps only MC31 units below MC31-1250000); a listing with no extractable matching-prefix serial is kept and flagged, never dropped.",
+  "_comment": "Scraper search targets. `model` is the exact koscom search string AND the raw feed name written to bikes.json (moto2-site/data/model-lookup.json is keyed on it). `display_name` is informational only — it records the intended site label; the scraper does NOT use it. Display/trim/chassis naming is resolved site-side from model-lookup.json + the VIN prefix, NOT here. `vin_prefix` is NOT set as a hard filter in general (VIN prefixes are shared across sub-generations; the search string disambiguates). The one exception is CBR250RR -> vin_prefix MC22: the modern 2017+ reintroduction (MC51) shares the exact search name but is NOT 25-year eligible, and MC22 vs MC51 cleanly separates the vintage generation, so listings without an MC22 frame number are dropped. Add a hard vin_prefix ONLY for this pattern — same name, a distinct wholly-ineligible modern generation, cleanly separable by chassis. `vin_serial_max` {prefix,max} is a softer variant for within-generation cutoffs: a soft serial upper bound (e.g. Honda HORNET250 keeps only MC31 units below MC31-1250000); a listing with no extractable matching-prefix serial is kept and flagged, never dropped.",
   "models": [
     {
       "make": "Honda",
@@ -16,6 +16,7 @@
     {
       "make": "Honda",
       "model": "CBR250RR",
+      "vin_prefix": "MC22",
       "display_name": "CBR250RR MC22",
       "engine_cc": 250
     },
