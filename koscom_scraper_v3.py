@@ -76,6 +76,30 @@ def extract_generic_vin(page_text):
     return f"{m.group(1)}-{m.group(2)}" if m else None
 
 
+def evaluate_vin_serial_bound(page_text, prefix, max_serial):
+    """Soft VIN serial UPPER-BOUND check, for targets that share a VIN prefix
+    across sub-generations where only the earlier serials qualify (e.g. Honda
+    HORNET250 is all MC31, but only units below MC31-1250000 clear the 25-year
+    import line). This is NOT a prefix filter — the search string already
+    disambiguates the model; this only bounds the serial.
+
+    Returns (verdict, vin):
+        ("keep", "MC31-1249999")  a matching-prefix serial was found, below max
+        ("skip", None)            a matching-prefix serial was found, at/above
+                                  max — drop as too new
+        ("flag", None)            no matching-prefix serial found — the caller
+                                  KEEPS the listing but flags it for manual
+                                  review (never silently drop a real listing).
+    """
+    m = re.search(rf"\b{re.escape(prefix)}-(\d{{3,8}})\b", page_text)
+    if not m:
+        return ("flag", None)
+    serial = int(m.group(1))
+    if serial >= max_serial:
+        return ("skip", None)
+    return ("keep", f"{prefix}-{m.group(1)}")
+
+
 # ---------------------------------------------------------- year extraction --
 # BDS/koscom inspection sheets record the model year as a Japanese imperial-era
 # date (e.g. 平成7年 / "H7", 昭和63年 / "S63", 令和2年 / "R2"), not a Gregorian
@@ -284,7 +308,12 @@ class KoscomScraperV3:
         return urls
 
     # ----------------------------------------------------------------- scrape
-    def scrape_listing(self, url, make, model, vin_prefix=None, engine_cc=None):
+    def scrape_listing(self, url, make, model, vin_prefix=None, engine_cc=None,
+                       vin_serial_max=None):
+        # `model` is BOTH the koscom search string AND the raw feed name written
+        # to bikes.json — the site (moto2-site) keys model-lookup.json on this
+        # exact string to attach the canonical model + trim + chassis for
+        # display, so it must stay the raw search string, never a display label.
         try:
             resp = self.session.get(url, timeout=SEARCH_TIMEOUT)
             resp.encoding = "utf-8"
@@ -318,6 +347,31 @@ class KoscomScraperV3:
                 return None
         else:
             vin = extract_generic_vin(page_text) or "Unknown"
+
+        # ---- VIN serial UPPER BOUND (soft include, not a prefix filter).
+        # Some targets share a VIN prefix across sub-generations where only the
+        # earlier (25-year-eligible) serials qualify — e.g. Honda HORNET250 is
+        # all MC31, but only units below MC31-1250000 clear the import line.
+        # `vin_serial_max = {"prefix": "MC31", "max": 1250000}` keeps a listing
+        # ONLY when a matching-prefix frame number is found AND its serial is
+        # below the bound. A serial at/above the bound is dropped as too new.
+        # A listing with NO extractable matching-prefix serial is KEPT and
+        # flagged (never silently drop a real listing — same rule as the photo
+        # filter and the missing-data N/A fallback); a human reviews the WARN.
+        if vin_serial_max:
+            prefix = vin_serial_max["prefix"]
+            max_serial = vin_serial_max["max"]
+            verdict, bound_vin = evaluate_vin_serial_bound(page_text, prefix, max_serial)
+            if verdict == "skip":
+                print(f"[SKIP] {listing_id}: {model} "
+                      f"{prefix}-serial >= bound {prefix}-{max_serial} (too new)")
+                return None
+            elif verdict == "keep":
+                vin = bound_vin          # pin VIN to the bound-checked frame no.
+            else:                        # "flag" — keep, but surface for review
+                print(f"[WARN] {listing_id}: {model} no {prefix} serial "
+                      f"found — cannot verify < {prefix}-{max_serial}, "
+                      f"keeping for manual review")
 
         # ---- Mileage: take the LARGEST km figure on the page. Detail pages
         # sometimes show partial/odometer-note numbers; the true total is the
@@ -439,8 +493,10 @@ class KoscomScraperV3:
             make, model = spec["make"], spec["model"]
             vin_prefix = spec.get("vin_prefix")
             engine_cc = spec.get("engine_cc")
+            vin_serial_max = spec.get("vin_serial_max")
             for url in self.search_listing_urls(make, model):
-                bike = self.scrape_listing(url, make, model, vin_prefix, engine_cc)
+                bike = self.scrape_listing(url, make, model, vin_prefix, engine_cc,
+                                           vin_serial_max=vin_serial_max)
                 if bike:
                     self.bikes.append(bike)
                 time.sleep(REQUEST_DELAY_SECONDS)
