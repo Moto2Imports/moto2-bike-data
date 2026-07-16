@@ -1,58 +1,9 @@
 {
+  "_comment": "Scraper search targets. `model` is the exact koscom search string AND the raw feed name written to bikes.json (moto2-site/data/model-lookup.json is keyed on it). `display_name` is informational only — it records the intended site label; the scraper does NOT use it. Display/trim/chassis naming is resolved site-side from model-lookup.json + the VIN prefix, NOT here. No `vin_prefix` hard filter is set (VIN prefixes are shared across sub-generations; the search string disambiguates). `vin_serial_max` {prefix,max} is the one exception: a soft serial upper bound (e.g. Honda HORNET250 keeps only MC31 units below MC31-1250000); a listing with no extractable matching-prefix serial is kept and flagged, never dropped.",
   "models": [
     {
       "make": "Honda",
-      "model": "CBR250RR",
-      "vin_prefix": "MC22",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
-      "model": "CRM250R"
-    },
-    {
-      "make": "Honda",
-      "model": "CRM250AR"
-    },
-    {
-      "make": "Honda",
       "model": "NS400R"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-3"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-4"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-4SE"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-4SP"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-5"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-5SE"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-5SP"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR50"
-    },
-    {
-      "make": "Honda",
-      "model": "NSR80"
     },
     {
       "make": "Honda",
@@ -63,20 +14,229 @@
       "model": "VFR400R-2"
     },
     {
-      "make": "Kawasaki",
-      "model": "KR-1"
+      "make": "Honda",
+      "model": "CBR250RR",
+      "display_name": "CBR250RR MC22",
+      "engine_cc": 250
     },
     {
-      "make": "Kawasaki",
-      "model": "KR-1S"
+      "make": "Honda",
+      "model": "CBR250R-1",
+      "engine_cc": 250
     },
     {
-      "make": "Kawasaki",
-      "model": "KR-1R"
+      "make": "Honda",
+      "model": "CBR250R-2",
+      "engine_cc": 250
     },
     {
-      "make": "Kawasaki",
-      "model": "KSR-2"
+      "make": "Honda",
+      "model": "CRM250R-1",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "CRM250R-2",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "CRM250R-3",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "CRM250AR",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "XR BAJA",
+      "display_name": "XR Baja",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "Motocompo",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "Monkey",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "Monkey Baja",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "Monkey R",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "Motora",
+      "display_name": "Motra",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "EZ-9",
+      "engine_cc": 90
+    },
+    {
+      "make": "Honda",
+      "model": "EZ Snow",
+      "engine_cc": 90
+    },
+    {
+      "make": "Honda",
+      "model": "HORNET250",
+      "display_name": "Hornet 250",
+      "engine_cc": 250,
+      "vin_serial_max": {
+        "prefix": "MC31",
+        "max": 1250000
+      }
+    },
+    {
+      "make": "Honda",
+      "model": "JADE",
+      "display_name": "Jade 250",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NS250R",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR50-1",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "NSR50-2",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "NSR50-3",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "NSR50-4",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "NSR80-1",
+      "engine_cc": 80
+    },
+    {
+      "make": "Honda",
+      "model": "NSR80-2",
+      "engine_cc": 80
+    },
+    {
+      "make": "Honda",
+      "model": "NSR80-3",
+      "engine_cc": 80
+    },
+    {
+      "make": "Honda",
+      "model": "NSR80-4",
+      "engine_cc": 80
+    },
+    {
+      "make": "Honda",
+      "model": "Dream 50",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "NS-1",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "NS-1-2",
+      "engine_cc": 50
+    },
+    {
+      "make": "Honda",
+      "model": "AX-1",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-1",
+      "display_name": "Honda NSR250 MC16",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-2",
+      "display_name": "Honda NSR250 MC18",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-2SP",
+      "display_name": "Honda NSR250 MC18 SP",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-3",
+      "display_name": "Honda NSR250 MC18-II",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-3SP",
+      "display_name": "Honda NSR250 MC18-II SP",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-4",
+      "display_name": "Honda NSR250 MC21 R",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-4SE",
+      "display_name": "Honda NSR250 MC21 SE",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-4SP",
+      "display_name": "Honda NSR250 MC21 SP",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-5",
+      "display_name": "Honda NSR250 MC28 R",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-5SE",
+      "display_name": "Honda NSR250 MC28 SE",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "NSR250R-5SP",
+      "display_name": "Honda NSR250 MC28 SP",
+      "engine_cc": 250
     },
     {
       "make": "Kawasaki",
@@ -95,8 +255,85 @@
       "model": "ZXR400R-2"
     },
     {
-      "make": "Suzuki",
-      "model": "GAG"
+      "make": "Kawasaki",
+      "model": "ZXR250-1",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "ZXR250-2",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KSR-2",
+      "engine_cc": 80
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KDX125SR",
+      "engine_cc": 125
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KDX200R",
+      "engine_cc": 200
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KDX200SR-1",
+      "engine_cc": 200
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KDX200SR-2",
+      "engine_cc": 200
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KDX220R",
+      "engine_cc": 220
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KDX220SR",
+      "engine_cc": 220
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KDX250SR",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR-1",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR-1S",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR-1R",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR250",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "KR250S",
+      "engine_cc": 250
+    },
+    {
+      "make": "Kawasaki",
+      "model": "BALIUS",
+      "display_name": "Balius 250",
+      "engine_cc": 250
     },
     {
       "make": "Suzuki",
@@ -112,31 +349,78 @@
     },
     {
       "make": "Suzuki",
-      "model": "RGV250"
+      "model": "GSX-R250-1",
+      "engine_cc": 250
     },
     {
-      "make": "Yamaha",
-      "model": "DT125"
+      "make": "Suzuki",
+      "model": "GSX-R250-2",
+      "engine_cc": 250
     },
     {
-      "make": "Yamaha",
-      "model": "DT200R"
+      "make": "Suzuki",
+      "model": "RG200 Gamma",
+      "engine_cc": 200
     },
     {
-      "make": "Yamaha",
-      "model": "DT200WR"
+      "make": "Suzuki",
+      "model": "BANDIT250",
+      "display_name": "Bandit 250",
+      "engine_cc": 250
     },
     {
-      "make": "Yamaha",
-      "model": "FZR250"
+      "make": "Suzuki",
+      "model": "BANDIT250-2",
+      "display_name": "Bandit 250-2",
+      "engine_cc": 250
     },
     {
-      "make": "Yamaha",
-      "model": "FZR250R-1"
+      "make": "Suzuki",
+      "model": "GAG",
+      "display_name": "GSX-R50 (GAG)",
+      "engine_cc": 50
     },
     {
-      "make": "Yamaha",
-      "model": "FZR250R-2"
+      "make": "Suzuki",
+      "model": "GSX250S KATANA",
+      "display_name": "GSX250S",
+      "engine_cc": 250
+    },
+    {
+      "make": "Suzuki",
+      "model": "WOLF250",
+      "display_name": "Wolf 250",
+      "engine_cc": 250
+    },
+    {
+      "make": "Suzuki",
+      "model": "RGV250-1",
+      "display_name": "Suzuki RGV250 VJ21",
+      "engine_cc": 250
+    },
+    {
+      "make": "Suzuki",
+      "model": "RGV250-1SP",
+      "display_name": "Suzuki RGV250 VJ21 SP",
+      "engine_cc": 250
+    },
+    {
+      "make": "Suzuki",
+      "model": "RGV250-2",
+      "display_name": "Suzuki RGV250 VJ22",
+      "engine_cc": 250
+    },
+    {
+      "make": "Suzuki",
+      "model": "RGV250-2SP",
+      "display_name": "Suzuki RGV250 VJ22 SP",
+      "engine_cc": 250
+    },
+    {
+      "make": "Suzuki",
+      "model": "RGV250-3",
+      "display_name": "Suzuki RGV250 VJ23 SP",
+      "engine_cc": 250
     },
     {
       "make": "Yamaha",
@@ -156,14 +440,6 @@
     },
     {
       "make": "Yamaha",
-      "model": "R-1Z"
-    },
-    {
-      "make": "Yamaha",
-      "model": "RZ250"
-    },
-    {
-      "make": "Yamaha",
       "model": "RZ350"
     },
     {
@@ -172,55 +448,181 @@
     },
     {
       "make": "Yamaha",
-      "model": "TDR125"
+      "model": "DT125",
+      "engine_cc": 125
     },
     {
       "make": "Yamaha",
-      "model": "TDR250"
+      "model": "DT125R-1",
+      "engine_cc": 125
     },
     {
       "make": "Yamaha",
-      "model": "TZM50R"
+      "model": "DT125R-2",
+      "engine_cc": 125
     },
     {
       "make": "Yamaha",
-      "model": "TZR125R"
+      "model": "DT125R-3",
+      "engine_cc": 125
     },
     {
       "make": "Yamaha",
-      "model": "TZR250-1"
+      "model": "DT200R-1",
+      "engine_cc": 200
     },
     {
       "make": "Yamaha",
-      "model": "TZR250-3"
+      "model": "DT200R-2",
+      "engine_cc": 200
     },
     {
       "make": "Yamaha",
-      "model": "TZR250-4"
+      "model": "DT220WR-1",
+      "engine_cc": 200
     },
     {
       "make": "Yamaha",
-      "model": "TZR250R"
+      "model": "DT220WR-2",
+      "engine_cc": 200
     },
     {
       "make": "Yamaha",
-      "model": "TZR250RS"
+      "model": "FZR250",
+      "engine_cc": 250
     },
     {
       "make": "Yamaha",
-      "model": "TZR250SP"
+      "model": "FZR250R-1",
+      "engine_cc": 250
     },
     {
       "make": "Yamaha",
-      "model": "TZR250SPR"
+      "model": "FZR250R-2",
+      "engine_cc": 250
     },
     {
       "make": "Yamaha",
-      "model": "YSR50"
+      "model": "R1-Z",
+      "engine_cc": 250
     },
     {
       "make": "Yamaha",
-      "model": "YSR80"
+      "model": "RZ250",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "RZ250R",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TDR80",
+      "engine_cc": 80
+    },
+    {
+      "make": "Yamaha",
+      "model": "TDR125",
+      "engine_cc": 125
+    },
+    {
+      "make": "Yamaha",
+      "model": "TDR250",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR125",
+      "engine_cc": 125
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR125R",
+      "engine_cc": 125
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR50",
+      "engine_cc": 50
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR50R",
+      "engine_cc": 50
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZM50R",
+      "engine_cc": 50
+    },
+    {
+      "make": "Yamaha",
+      "model": "YSR50",
+      "engine_cc": 50
+    },
+    {
+      "make": "Yamaha",
+      "model": "YSR80",
+      "engine_cc": 80
+    },
+    {
+      "make": "Yamaha",
+      "model": "SRV250",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "SDR200",
+      "engine_cc": 200
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250",
+      "display_name": "Yamaha TZR250 1KT",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250-3",
+      "display_name": "Yamaha TZR250 3MA",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250-4",
+      "display_name": "Yamaha TZR250 3MA-II",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250-4SP",
+      "display_name": "Yamaha TZR250 3MA-II SP",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250R",
+      "display_name": "Yamaha TZR250 R",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250RS",
+      "display_name": "Yamaha TZR250 RS",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250R SP",
+      "display_name": "Yamaha TZR250 SP",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TZR250SPR",
+      "display_name": "Yamaha TZR250 SPR",
+      "engine_cc": 250
     }
   ]
 }
