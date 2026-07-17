@@ -126,6 +126,58 @@ def test_per_model_query_has_no_force_or_max_year():
     assert all("force=" not in u and "max_year=" not in u for u in urls), urls
 
 
+# ---- displacement (cc) card pre-filter ------------------------------------
+def _card_html(lid, cc):
+    """A results-page card wrapping this listing's links + its cc line, so the
+    card-cc parser can associate the displacement with the listing."""
+    disp = f"<span>{cc}cc</span>" if cc is not None else ""
+    return (f'<div class="card"><a href="/bike-{lid}.htm"><img src="x"></a>'
+            f'<a href="/bike-{lid}.htm">t{lid}</a>{disp}</div>')
+
+
+def _cc_scraper(pages):
+    """pages: {page_number: [(lid, cc_or_None), ...]}."""
+    def get(url, timeout=None):
+        page = int(parse_qs(urlparse(url).query)["page"][0])
+        html = "<html><body>" + "".join(_card_html(l, c) for l, c in pages.get(page, [])) + "</body></html>"
+        return types.SimpleNamespace(text=html, encoding="utf-8")
+    s = KoscomScraperV3()
+    s.session = types.SimpleNamespace(get=get)
+    s.bikes = []
+    s.seen_listing_ids = set()
+    return s
+
+
+def test_card_cc_parsed_from_card_text():
+    rows = KoscomScraperV3._listings_on_page(_card_html("1001", 400))
+    assert rows == [("1001", "https://auc.koscom-trade.com/bike-1001.htm", 400)], rows
+
+
+def test_browse_skips_le_250cc_before_fetch():
+    s = _cc_scraper({1: [("1001", 400), ("1002", 250), ("1003", 750), ("1004", 125)], 2: []})
+    ids = [u.split("bike-")[1].split(".htm")[0] for u in s.browse_make_urls("Honda", 2000)]
+    assert ids == ["1001", "1003"], ids          # 250 and 125 skipped; 400/750 kept
+
+
+def test_browse_cc_boundary_250_skipped_251_kept():
+    s = _cc_scraper({1: [("1001", 250), ("1002", 251)], 2: []})
+    ids = [u.split("bike-")[1].split(".htm")[0] for u in s.browse_make_urls("Honda", 2000)]
+    assert ids == ["1002"], ids                  # <=250 skipped, >250 kept
+
+
+def test_browse_keeps_unreadable_cc_fail_open():
+    # Unknown cc must NOT be skipped — correctness stays with the year gate.
+    s = _cc_scraper({1: [("1001", None), ("1002", 250)], 2: []})
+    ids = [u.split("bike-")[1].split(".htm")[0] for u in s.browse_make_urls("Honda", 2000)]
+    assert ids == ["1001"], ids
+
+
+def test_counter_counts_only_to_fetch_after_cc_filter():
+    # 400 kept + None kept = 2 to-fetch; 250 + 125 skipped.
+    s = _cc_scraper({1: [("1001", 400), ("1002", 250), ("1003", None), ("1004", 125)], 2: []})
+    assert s.count_make_listings("Honda", 2000) == 2
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

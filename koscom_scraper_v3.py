@@ -75,6 +75,12 @@ SEARCH_TIMEOUT = 15
 # the two repos can't share a literal constant, so keep both at 26.
 ELIGIBILITY_WINDOW_YEARS = 26
 
+# Browse displacement pre-filter: listings at or below this cc are already
+# covered by the hand-curated per-model list, so Phase B skips them BEFORE
+# fetching any detail page — the cc is read off the search-results card at zero
+# extra request cost. Purely a volume cut; the year gate stays authoritative.
+BROWSE_SKIP_CC_MAX = 250
+
 # Generic JDM frame-number pattern (PREFIX-serial), used when models.json has
 # no vin_prefix. The prefix is 2-6 alphanumerics that must contain BOTH a letter
 # and a digit, so it matches:
@@ -367,11 +373,40 @@ class KoscomScraperV3:
         self.seen_listing_ids = set()   # <-- dedup across the entire run
 
     # ------------------------------------------------------------------ search
-    @staticmethod
-    def _listings_on_page(html):
-        """(listing_id, full_url) pairs on one search-results page, deduped
+    # ⚠️ UNVERIFIED SELECTOR — the per-card displacement read below assumes each
+    # results-page card carries a "<NNN>cc" token and that a listing's card is
+    # the largest ancestor of its link that contains only that one listing. Not
+    # checked against live koscom markup. It FAILS OPEN: an unreadable cc yields
+    # None -> the listing is kept/queued, never skipped, so correctness never
+    # depends on it (the detail-page year gate is authoritative). Verify live.
+    _CARD_CC_RE = re.compile(r"\b(\d{2,4})\s*cc\b", re.IGNORECASE)
+
+    @classmethod
+    def _card_cc(cls, anchor, lid):
+        """Displacement (int cc) for the card owning `anchor`/`lid`, or None.
+        Ascends to the largest ancestor still containing only this listing id,
+        then reads the first '<NNN>cc' in that card's text."""
+        node = anchor
+        card = anchor
+        for _ in range(8):                       # bounded ascent
+            parent = node.parent
+            if parent is None:
+                break
+            ids = {listing_id_from_url(a["href"])
+                   for a in parent.find_all("a", href=True) if "/bike-" in a["href"]}
+            if ids and ids != {lid}:             # parent bleeds into another card
+                break
+            card = parent
+            node = parent
+        m = cls._CARD_CC_RE.search(card.get_text(" ", strip=True))
+        return int(m.group(1)) if m else None
+
+    @classmethod
+    def _listings_on_page(cls, html):
+        """(listing_id, full_url, cc) triples on one search-results page, deduped
         within the page in document order. A single bike has several anchors
-        (thumbnail/title/price), so per-page dedup is essential."""
+        (thumbnail/title/price), so per-page dedup is essential. `cc` is the
+        card's displacement (int) or None when unreadable."""
         soup = BeautifulSoup(html, "html.parser")
         out, seen = [], set()
         for a in soup.find_all("a", href=True):
@@ -381,7 +416,7 @@ class KoscomScraperV3:
                 if lid not in seen:
                     seen.add(lid)
                     full = href if href.startswith("http") else KOSCOM_BASE_URL + href
-                    out.append((lid, full))
+                    out.append((lid, full, cls._card_cc(a, lid)))
         return out
 
     def _paginate_search(self, params_base, exclude_seen=True,
@@ -416,22 +451,24 @@ class KoscomScraperV3:
                 redir = f" -> redirected to {final}" if final != url else ""
                 print(f"[WARN] {url}: HTTP {status}, 0 listing anchors on "
                       f"page 1{redir} — query returned no results (check params)")
-            fresh = [(lid, full) for (lid, full) in rows if lid not in local_seen]
+            fresh = [(lid, full, cc) for (lid, full, cc) in rows if lid not in local_seen]
             if not fresh:               # empty page or last-page repeat -> done
                 break
-            for lid, full in fresh:
+            for lid, full, cc in fresh:
                 local_seen.add(lid)
                 if exclude_seen and lid in self.seen_listing_ids:
                     continue
-                yield lid, full
+                yield lid, full, cc
             time.sleep(REQUEST_DELAY_SECONDS)
 
     def search_listing_urls(self, make, model):
-        """Phase A: paginated per-model search; unique, not-yet-claimed URLs."""
+        """Phase A: paginated per-model search; unique, not-yet-claimed URLs.
+        No displacement filter here — the curated list intentionally includes
+        small-cc targets."""
         urls = []
-        for lid, full in self._paginate_search({"manuf": make, "model": model},
-                                               exclude_seen=True,
-                                               max_pages=MAX_PAGES_PER_MODEL):
+        for lid, full, _cc in self._paginate_search({"manuf": make, "model": model},
+                                                     exclude_seen=True,
+                                                     max_pages=MAX_PAGES_PER_MODEL):
             self.seen_listing_ids.add(lid)
             urls.append(full)
         print(f"[SEARCH] {make} {model}: {len(urls)} unique listings")
@@ -449,27 +486,39 @@ class KoscomScraperV3:
 
     def browse_make_urls(self, make, cutoff):
         """Phase B: sweep a make's listings (koscom pre-filtered to <= cutoff);
-        unique URLs not already claimed by Phase A."""
-        urls = []
-        for lid, full in self._paginate_search(self._browse_params(make, cutoff),
-                                               exclude_seen=True,
-                                               max_pages=MAX_PAGES_PER_MAKE):
+        unique URLs not already claimed by Phase A, with cards at/below
+        BROWSE_SKIP_CC_MAX skipped BEFORE any detail fetch (curated list covers
+        them). Unreadable cc -> kept (fail open)."""
+        urls, skipped = [], 0
+        for lid, full, cc in self._paginate_search(self._browse_params(make, cutoff),
+                                                   exclude_seen=True,
+                                                   max_pages=MAX_PAGES_PER_MAKE):
+            if cc is not None and cc <= BROWSE_SKIP_CC_MAX:
+                skipped += 1
+                continue                         # ≤250cc: covered by curated list
             self.seen_listing_ids.add(lid)
             urls.append(full)
-        print(f"[BROWSE] {make}: {len(urls)} unclaimed listings to gate")
+        print(f"[BROWSE] {make}: {len(urls)} listings to gate "
+              f"(skipped {skipped} at <={BROWSE_SKIP_CC_MAX}cc before any fetch)")
         return urls
 
     def count_make_listings(self, make, cutoff):
-        """Dry-run counter (no detail fetches): distinct listing IDs koscom
-        returns for a make at max_year<=cutoff. Ignores seen/claimed state —
-        this is the pre-(client-gate) population Phase B will fetch."""
-        ids = set()
-        for lid, _ in self._paginate_search(self._browse_params(make, cutoff),
-                                            exclude_seen=False,
-                                            max_pages=MAX_PAGES_PER_MAKE):
-            ids.add(lid)
-        print(f"[COUNT] {make}: {len(ids)} distinct listings (max_year<={cutoff})")
-        return len(ids)
+        """Dry-run counter (no detail fetches): distinct listings koscom returns
+        for a make at max_year<=cutoff, AFTER the displacement card pre-filter
+        (BROWSE_SKIP_CC_MAX) — i.e. the detail pages Phase B would actually
+        fetch. Reports raw and skipped counts too. Ignores seen/claimed state."""
+        to_fetch, skipped = 0, 0
+        for _lid, _full, cc in self._paginate_search(self._browse_params(make, cutoff),
+                                                     exclude_seen=False,
+                                                     max_pages=MAX_PAGES_PER_MAKE):
+            if cc is not None and cc <= BROWSE_SKIP_CC_MAX:
+                skipped += 1
+            else:
+                to_fetch += 1
+        print(f"[COUNT] {make}: {to_fetch} to fetch (>{BROWSE_SKIP_CC_MAX}cc or "
+              f"cc-unknown) + {skipped} skipped at <={BROWSE_SKIP_CC_MAX}cc "
+              f"= {to_fetch + skipped} raw at max_year<={cutoff}")
+        return to_fetch
 
     # ----------------------------------------------------------------- scrape
     def scrape_listing(self, url, make, model, vin_prefix=None, engine_cc=None,
@@ -679,8 +728,9 @@ class KoscomScraperV3:
         total = 0
         for make in makes:
             total += self.count_make_listings(make, cutoff)
-        print(f"[COUNT] TOTAL distinct listings across makes: {total} "
-              f"(koscom-prefiltered to <={cutoff}; client year-gate trims further)")
+        print(f"[COUNT] TOTAL detail-fetches Phase B would make: {total} "
+              f"(>{BROWSE_SKIP_CC_MAX}cc, max_year<={cutoff}; the client year-gate "
+              f"trims this further to the eligible set)")
         return total
 
     # -------------------------------------------------------------------- run
