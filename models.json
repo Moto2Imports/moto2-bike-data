@@ -625,5 +625,9 @@
       "display_name": "Yamaha TZR250 SPR",
       "engine_cc": 250
     }
-  ]
+  ],
+  "browse_by_make": {
+    "_comment": "Phase B 'browse by make' mode: sweep every koscom listing per make and keep only the year-eligible ones (model year present AND <= current_year - 26). The cutoff window lives in the scraper (ELIGIBILITY_WINDOW_YEARS), not here, so there is one source of truth; this block only lists the makes to sweep. Phase A (the per-model list above) runs first and claims overlapping lots, so browse never double-emits them.",
+    "makes": ["Honda", "Kawasaki", "Suzuki", "Yamaha"]
+  }
 }
