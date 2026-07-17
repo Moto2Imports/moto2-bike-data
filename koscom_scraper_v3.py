@@ -407,6 +407,15 @@ class KoscomScraperV3:
                 print(f"[ERROR] search page {page} failed: {e}")
                 break
             rows = self._listings_on_page(resp.text)
+            if page == 1 and not rows:
+                # Page 1 with zero listing anchors = the query returned a
+                # non-results page (form/landing/redirect/error), NOT a genuinely
+                # empty make. Say so loudly instead of silently reporting 0.
+                status = getattr(resp, "status_code", "?")
+                final = getattr(resp, "url", url)
+                redir = f" -> redirected to {final}" if final != url else ""
+                print(f"[WARN] {url}: HTTP {status}, 0 listing anchors on "
+                      f"page 1{redir} — query returned no results (check params)")
             fresh = [(lid, full) for (lid, full) in rows if lid not in local_seen]
             if not fresh:               # empty page or last-page repeat -> done
                 break
@@ -428,11 +437,21 @@ class KoscomScraperV3:
         print(f"[SEARCH] {make} {model}: {len(urls)} unique listings")
         return urls
 
-    def browse_make_urls(self, make):
-        """Phase B: sweep every listing for a make (no model filter); unique
-        URLs not already claimed by Phase A."""
+    @staticmethod
+    def _browse_params(make, cutoff):
+        """koscom's confirmed make-browse query (from its own search UI):
+        manuf + max_year + force=1. `force=1` is REQUIRED — without it koscom
+        shows a warning/landing page for a search this broad (no listings).
+        `max_year` is a server-side PRE-FILTER to cut fetch volume; it is NOT
+        trusted for correctness — scrape_listing's client-side year gate stays
+        authoritative regardless of koscom's max_year semantics."""
+        return {"manuf": make, "max_year": cutoff, "force": 1}
+
+    def browse_make_urls(self, make, cutoff):
+        """Phase B: sweep a make's listings (koscom pre-filtered to <= cutoff);
+        unique URLs not already claimed by Phase A."""
         urls = []
-        for lid, full in self._paginate_search({"manuf": make},
+        for lid, full in self._paginate_search(self._browse_params(make, cutoff),
                                                exclude_seen=True,
                                                max_pages=MAX_PAGES_PER_MAKE):
             self.seen_listing_ids.add(lid)
@@ -440,15 +459,16 @@ class KoscomScraperV3:
         print(f"[BROWSE] {make}: {len(urls)} unclaimed listings to gate")
         return urls
 
-    def count_make_listings(self, make):
+    def count_make_listings(self, make, cutoff):
         """Dry-run counter (no detail fetches): distinct listing IDs koscom
-        returns for a make. Ignores seen/claimed state — this is the raw
-        make-level population, the pre-gate denominator for sizing browse."""
+        returns for a make at max_year<=cutoff. Ignores seen/claimed state —
+        this is the pre-(client-gate) population Phase B will fetch."""
         ids = set()
-        for lid, _ in self._paginate_search({"manuf": make}, exclude_seen=False,
+        for lid, _ in self._paginate_search(self._browse_params(make, cutoff),
+                                            exclude_seen=False,
                                             max_pages=MAX_PAGES_PER_MAKE):
             ids.add(lid)
-        print(f"[COUNT] {make}: {len(ids)} distinct listings")
+        print(f"[COUNT] {make}: {len(ids)} distinct listings (max_year<={cutoff})")
         return len(ids)
 
     # ----------------------------------------------------------------- scrape
@@ -653,12 +673,14 @@ class KoscomScraperV3:
         before a full run."""
         cfg = load_browse_config()
         makes = cfg["makes"] if cfg else ["Honda", "Kawasaki", "Suzuki", "Yamaha"]
-        print(f"[COUNT] {datetime.now().isoformat()} — dry-run over {len(makes)} make(s)")
+        cutoff = eligibility_cutoff_year()
+        print(f"[COUNT] {datetime.now().isoformat()} — dry-run over {len(makes)} "
+              f"make(s), max_year<={cutoff}")
         total = 0
         for make in makes:
-            total += self.count_make_listings(make)
+            total += self.count_make_listings(make, cutoff)
         print(f"[COUNT] TOTAL distinct listings across makes: {total} "
-              f"(pre-gate; year-eligible subset is smaller)")
+              f"(koscom-prefiltered to <={cutoff}; client year-gate trims further)")
         return total
 
     # -------------------------------------------------------------------- run
@@ -699,7 +721,7 @@ class KoscomScraperV3:
             print(f"[START] Phase B: browse {len(makes)} make(s) — "
                   f"cutoff year {cutoff} (keep year present AND <= {cutoff})")
             for make in makes:
-                for url in self.browse_make_urls(make):
+                for url in self.browse_make_urls(make, cutoff):
                     bike = self.scrape_listing(url, make, None, browse_mode=True,
                                                cutoff_year=cutoff)
                     if bike:
