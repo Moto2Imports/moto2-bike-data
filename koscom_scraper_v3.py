@@ -280,6 +280,16 @@ def extract_model_name(soup, make=None):
     return None
 
 
+def extract_auction_house(page_text):
+    """The BDS auction house string (e.g. 'BDS Kantou'), bare 'BDS' when only the
+    marker is present, or None when this isn't a BDS auction. Single source for
+    the BDS-only filter, shared by scrape_listing and the model-research tool."""
+    m = re.search(r"\bBDS[\s\u00a0]+[A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", page_text)
+    if m:
+        return re.sub(r"\s+", " ", m.group(0)).strip()
+    return "BDS" if "BDS" in page_text else None
+
+
 # --------------------------------------------------------- photo filtering --
 # Auction photos arrive as a fixed 33-slot set: a 9-slot hero grid on the
 # tru.ru / ajes CDNs (whole-bike shots ~1-6, accessory/extra ~7-9) followed by
@@ -544,14 +554,10 @@ class KoscomScraperV3:
         listing_id = listing_id_from_url(url)
 
         # ---- BDS-only filter, and EXTRACT the house (never hardcode it)
-        house_match = re.search(r"\bBDS[\s\u00a0]+[A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", page_text)
-        if not house_match:
-            if "BDS" not in page_text:
-                print(f"[SKIP] {listing_id}: not a BDS auction")
-                return None
-            auction_house = "BDS"
-        else:
-            auction_house = re.sub(r"\s+", " ", house_match.group(0)).strip()
+        auction_house = extract_auction_house(page_text)
+        if auction_house is None:
+            print(f"[SKIP] {listing_id}: not a BDS auction")
+            return None
 
         # ---- Title / registration certificate present? koscom marks bikes sold
         # WITHOUT their certificate as "SHO LOUIS NOT EQUIPPED" (in the model
