@@ -39,7 +39,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from koscom_common import KOSCOM_BASE_URL, make_session
+from koscom_common import KOSCOM_BASE_URL, make_session, strip_no_title_marker
 
 MAKES = ["Honda", "Suzuki", "Kawasaki", "Yamaha", "Bimota", "BMW", "Aprilia"]
 STATS_URL = f"{KOSCOM_BASE_URL}/bike_st"
@@ -88,15 +88,20 @@ _PAIR_RE = re.compile(r"([^#=\"'()]+?)#(\d+)")
 
 
 def parse_model_counts(text):
-    """[(model, count)] from a 'Name#Count=Name#Count=...' payload, deduped
-    (summing counts) while preserving first-seen order."""
-    out = OrderedDict()
+    """[(model, count, has_title)] from a 'Name#Count=Name#Count=...' payload.
+    koscom marks no-title bikes with a 'SHO LOUIS NOT EQUIPPED' suffix on the
+    model name — that's stripped from the model and carried as has_title, so a
+    model that appears both with and without the marker yields two rows (titled
+    vs not). Deduped (summing counts), first-seen order."""
+    out = OrderedDict()                       # (clean_model, has_title) -> count
     for name, count in _PAIR_RE.findall(text or ""):
         name = name.strip()
         if not name:
             continue
-        out[name] = out.get(name, 0) + int(count)
-    return list(out.items())
+        clean, no_title = strip_no_title_marker(name)
+        key = (clean or name, not no_title)
+        out[key] = out.get(key, 0) + int(count)
+    return [(model, count, has_title) for (model, has_title), count in out.items()]
 
 
 def fetch_models_for_make(session, make, token, house=None):
@@ -129,36 +134,38 @@ def _style_header(ws, ncols):
 
 
 def build_workbook(results, makes, path, house=None):
-    """results: {make: [(model, count), ...]}. Writes `path`."""
+    """results: {make: [(model, count, has_title), ...]}. Writes `path`."""
     wb = openpyxl.Workbook()
 
     ws = wb.active
     ws.title = "Models"
     scope = f"BDS only (house={house})" if house else "full catalog (all houses)"
-    ws.append(["Make", "Model (koscom naming)", "Listings"])
+    ws.append(["Make", "Model (koscom naming)", "Has title", "Listings"])
     for make in makes:
-        for model, count in sorted(results.get(make, []), key=lambda mc: mc[0].lower()):
-            ws.append([make, model, count])
+        # sort by model, then title-bearing rows before no-title.
+        for model, count, has_title in sorted(
+                results.get(make, []), key=lambda r: (r[0].lower(), not r[2])):
+            ws.append([make, model, "Yes" if has_title else "NO", count])
     for row in ws.iter_rows(min_row=2):
         for cell in row:
             cell.font = _BODY_FONT
-    _style_header(ws, 3)
-    ws.column_dimensions["A"].width = 12
-    ws.column_dimensions["B"].width = 40
-    ws.column_dimensions["C"].width = 12
+    _style_header(ws, 4)
+    for col, w in zip("ABCD", (12, 40, 10, 12)):
+        ws.column_dimensions[col].width = w
 
     sm = wb.create_sheet("Summary")
-    sm.append(["Make", "Distinct models", "Total listings"])
+    sm.append(["Make", "Distinct models", "Total listings", "No-title listings"])
     for make in makes:
-        pairs = results.get(make, [])
-        sm.append([make, len(pairs), sum(c for _, c in pairs)])
+        rows = results.get(make, [])
+        sm.append([make, len(rows), sum(c for _, c, _ in rows),
+                   sum(c for _, c, ht in rows if not ht)])
     sm.append([])
     sm.append([f"Source: koscom bike_st ajxModel endpoint — {scope}"])
     for row in sm.iter_rows(min_row=2, max_row=1 + len(makes)):
         for cell in row:
             cell.font = _BODY_FONT
-    _style_header(sm, 3)
-    for col, w in zip("ABC", (12, 16, 16)):
+    _style_header(sm, 4)
+    for col, w in zip("ABCD", (12, 16, 16, 18)):
         sm.column_dimensions[col].width = w
 
     wb.save(path)

@@ -58,22 +58,30 @@ def test_fetch_token_reads_fresh_from_stats_page():
 # --------------------------------------------------------------- pair parsing
 def test_parse_basic_pairs():
     assert mc.parse_model_counts("CBR400RR#31=VFR400R#14=RVF400#6") == [
-        ("CBR400RR", 31), ("VFR400R", 14), ("RVF400", 6)]
+        ("CBR400RR", 31, True), ("VFR400R", 14, True), ("RVF400", 6, True)]
 
 
 def test_parse_wrapped_callback_and_unicode():
     payload = "ajxModelCB('RGV250Γ#4=GSX-R400#11=NSR250 SP#2')"
     assert mc.parse_model_counts(payload) == [
-        ("RGV250Γ", 4), ("GSX-R400", 11), ("NSR250 SP", 2)]
+        ("RGV250Γ", 4, True), ("GSX-R400", 11, True), ("NSR250 SP", 2, True)]
 
 
 def test_parse_dedupes_summing_counts():
-    assert mc.parse_model_counts("A#3=B#1=A#2") == [("A", 5), ("B", 1)]
+    assert mc.parse_model_counts("A#3=B#1=A#2") == [("A", 5, True), ("B", 1, True)]
 
 
 def test_parse_empty_or_garbage():
     assert mc.parse_model_counts("") == []
     assert mc.parse_model_counts("no pairs at all") == []
+
+
+def test_parse_strips_no_title_marker_and_flags():
+    # The no-title suffix is stripped from the model name and flagged; the same
+    # base model with and without the marker becomes two rows.
+    payload = "NSR250R-1#20=NSR250R-1 SHO LOUIS NOT EQUIPPED#5"
+    assert mc.parse_model_counts(payload) == [
+        ("NSR250R-1", 20, True), ("NSR250R-1", 5, False)]
 
 
 # ---------------------------------------------------------------- request shape
@@ -93,7 +101,7 @@ def test_request_puts_token_in_url_and_manuf_in_form():
     pairs = mc.fetch_models_for_make(s, "Honda", "TOK1", house=None)
     assert "ajx=TOK1" in calls["url"] and "file=ajxModel" in calls["url"]
     assert calls["data"] == {"manuf": "Honda"}
-    assert pairs == [("CBR400RR", 31), ("VFR400R", 14)]
+    assert pairs == [("CBR400RR", 31, True), ("VFR400R", 14, True)]
 
 
 def test_house_param_added_when_set():
@@ -105,7 +113,8 @@ def test_house_param_added_when_set():
 # ---------------------------------------------------------------- workbook out
 def test_build_workbook_structure_and_sorting():
     results = {
-        "Honda": [("VFR400R", 14), ("CBR400RR", 31), ("RVF400", 6)],
+        "Honda": [("VFR400R", 14, True), ("CBR400RR", 31, True),
+                  ("RVF400", 6, True), ("CBR400RR", 3, False)],   # a no-title CBR bucket
         "Bimota": [],
     }
     with tempfile.TemporaryDirectory() as d:
@@ -114,19 +123,22 @@ def test_build_workbook_structure_and_sorting():
         wb = openpyxl.load_workbook(path)
         assert wb.sheetnames == ["Models", "Summary"]
         ws = wb["Models"]
-        assert [c.value for c in ws[1]] == ["Make", "Model (koscom naming)", "Listings"]
-        rows = [(r[0].value, r[1].value, r[2].value) for r in ws.iter_rows(min_row=2)]
-        assert rows == [                                   # Honda sorted alpha
-            ("Honda", "CBR400RR", 31),
-            ("Honda", "RVF400", 6),
-            ("Honda", "VFR400R", 14),
+        assert [c.value for c in ws[1]] == [
+            "Make", "Model (koscom naming)", "Has title", "Listings"]
+        rows = [(r[0].value, r[1].value, r[2].value, r[3].value)
+                for r in ws.iter_rows(min_row=2)]
+        assert rows == [                                   # sorted by model, title before no-title
+            ("Honda", "CBR400RR", "Yes", 31),
+            ("Honda", "CBR400RR", "NO", 3),
+            ("Honda", "RVF400", "Yes", 6),
+            ("Honda", "VFR400R", "Yes", 14),
         ], rows
         assert ws["A2"].font.name == "Arial"
         sm = wb["Summary"]
-        by_make = {r[0].value: (r[1].value, r[2].value)
+        by_make = {r[0].value: (r[1].value, r[2].value, r[3].value)
                    for r in sm.iter_rows(min_row=2, max_row=3)}
-        assert by_make["Honda"] == (3, 51)                 # 3 models, 31+14+6 listings
-        assert by_make["Bimota"] == (0, 0)
+        assert by_make["Honda"] == (4, 54, 3)              # 4 rows, 54 listings, 3 no-title
+        assert by_make["Bimota"] == (0, 0, 0)
 
 
 if __name__ == "__main__":

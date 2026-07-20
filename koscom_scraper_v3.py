@@ -58,6 +58,7 @@ from koscom_common import (
     listing_id_from_url,
     make_session,
     slugify,
+    strip_no_title_marker,
 )
 
 MAX_PAGES_PER_MODEL = 20          # safety cap (per-model searches: small result sets)
@@ -561,7 +562,8 @@ class KoscomScraperV3:
 
         # ---- Title / registration certificate present? koscom marks bikes sold
         # WITHOUT their certificate as "SHO LOUIS NOT EQUIPPED" (in the model
-        # title). Scanned over the whole page and surfaced as a boolean.
+        # title). Scanned over the whole page (location-agnostic) and surfaced as
+        # a boolean, applied to EVERY listing regardless of pipeline.
         has_title = not has_no_title_marker(page_text)
 
         # ---- Model year (Japanese era → Gregorian int; None if not found).
@@ -575,6 +577,9 @@ class KoscomScraperV3:
         # unknown-year eligible bikes). Per-model scraping skips this entirely.
         if browse_mode:
             model = extract_model_name(soup, make) or "Unknown"
+            # keep the no-title phrase out of the displayed model name; the
+            # hasTitle flag carries the fact.
+            model = strip_no_title_marker(model)[0] or "Unknown"
             if not passes_year_gate(year, cutoff_year):
                 print(f"[SKIP] {listing_id}: {make} {model} — year {year!r} "
                       f"fails eligibility gate (need present and <= {cutoff_year})")

@@ -43,7 +43,8 @@ MEDIA_HEADERS = {
 # appears as part of the displayed model name/title (e.g. "HONDA / CRF250L SHO
 # LOUIS NOT EQUIPPED"). It means the bike ships WITHOUT its title/registration
 # certificate — material for a buyer — so we surface it as a boolean flag and
-# strip the phrase out of the displayed model name.
+# strip the phrase out of the displayed model name. Shared by the scraper and
+# the catalog tool.
 #
 # Detection runs over the whole page text (location-agnostic); confirmed on a
 # live listing to sit in the title, so a whole-page scan reliably catches it.
