@@ -128,11 +128,22 @@ def test_per_model_query_has_no_force_or_max_year():
 
 # ---- displacement (cc) card pre-filter ------------------------------------
 def _card_html(lid, cc):
-    """A results-page card wrapping this listing's links + its cc line, so the
-    card-cc parser can associate the displacement with the listing."""
-    disp = f"<span>{cc}cc</span>" if cc is not None else ""
-    return (f'<div class="card"><a href="/bike-{lid}.htm"><img src="x"></a>'
-            f'<a href="/bike-{lid}.htm">t{lid}</a>{disp}</div>')
+    """A results-page card mirroring koscom's real structure: a `bkwapper_lot`
+    div, the model in `info2`, and an `info3` block whose "Engine CC" label is
+    FOLLOWED by the bare cc value (not a `cc`-suffixed token). cc=None omits the
+    Engine CC row (unreadable-cc case)."""
+    cc_row = f"<font>Engine CC</font> &nbsp; {cc}<br>" if cc is not None else ""
+    return (
+        f"<div class=bkwapper_lot>"                       # card boundary
+        f'<div style="position:relative">'
+        f'<a target=_blank href="/bike-{lid}.htm"><img src="x"></a></div>'
+        f'<div class=info2><a href="/bike-{lid}.htm">HONDA</a> / '
+        f'<a href="/bike-{lid}.htm">M{lid}</a></div>'
+        f"<div class=info3><nobr>"
+        f"<font>Mileage</font> &nbsp; * 1,000 km<br>{cc_row}"
+        f"<font>Condition</font> &nbsp; 4</div>"          # close info3
+        f"</div>"                                          # close bkwapper_lot
+    )
 
 
 def _cc_scraper(pages):
@@ -148,7 +159,27 @@ def _cc_scraper(pages):
     return s
 
 
-def test_card_cc_parsed_from_card_text():
+# Real card HTML captured from a live ?manuf=Honda&force=1 page (APE100, 100cc).
+_REAL_CARD = (
+    '<div class=bkwapper_lot><div class=lot><div style="position:relative">'
+    '<a target=_blank href="/bike-2038867570.htm"><img src="x&w=320"></a>'
+    "<div class=info1><a href=\"/bike-2038867570.htm\">2026-07-22 &gt; BDS Kantou &gt; 2963</a></div></div>"
+    '<div class=info2><a href="/bike-2038867570.htm">HONDA</a> / '
+    '<a href="/bike-2038867570.htm">APE100</a></div>'
+    '<table><tr><td><div class=info3><nobr>'
+    '<font style="color:#7b808f">Mileage</font> &nbsp; * 8,422 km<br>'
+    '<font style="color:#7b808f">Engine CC</font> &nbsp; 100<br>'
+    '<font style="color:#7b808f">Condition</font> &nbsp; 4</div></td></tr></table></div>'
+)
+
+
+def test_card_cc_parsed_from_real_koscom_card():
+    # Boundary = bkwapper_lot; "Engine CC" label -> the number after it (100).
+    rows = KoscomScraperV3._listings_on_page(_REAL_CARD)
+    assert rows == [("2038867570", "https://auc.koscom-trade.com/bike-2038867570.htm", 100)], rows
+
+
+def test_card_cc_parsed_from_synthetic_card():
     rows = KoscomScraperV3._listings_on_page(_card_html("1001", 400))
     assert rows == [("1001", "https://auc.koscom-trade.com/bike-1001.htm", 400)], rows
 

@@ -384,33 +384,34 @@ class KoscomScraperV3:
         self.seen_listing_ids = set()   # <-- dedup across the entire run
 
     # ------------------------------------------------------------------ search
-    # ⚠️ UNVERIFIED SELECTOR — the per-card displacement read below assumes each
-    # results-page card carries a "<NNN>cc" token and that a listing's card is
-    # the largest ancestor of its link that contains only that one listing. Not
-    # checked against live koscom markup. It FAILS OPEN: an unreadable cc yields
+    # Displacement is read from the real koscom results-card structure:
+    #   <div class=bkwapper_lot> ... <div class=info3> ...
+    #       <font ...>Engine CC</font> &nbsp; 100<br> ... </div> ... </div>
+    # i.e. each card is a `bkwapper_lot` div, and the cc is the number that
+    # FOLLOWS the literal "Engine CC" label (NOT a `cc`-suffixed token — the "CC"
+    # is in the label, before the value). FAILS OPEN: an unreadable cc yields
     # None -> the listing is kept/queued, never skipped, so correctness never
-    # depends on it (the detail-page year gate is authoritative). Verify live.
-    _CARD_CC_RE = re.compile(r"\b(\d{2,4})\s*cc\b", re.IGNORECASE)
+    # depends on it (the detail-page year gate is authoritative).
+    _CARD_CC_RE = re.compile(r"Engine\s*CC[\s *:]*([\d,]{1,6})", re.IGNORECASE)
+
+    @staticmethod
+    def _card_container(anchor):
+        """The listing card owning `anchor` — the nearest `bkwapper_lot`
+        ancestor — or None if the card structure isn't recognised."""
+        for parent in anchor.parents:
+            if "bkwapper_lot" in (parent.get("class") or []):
+                return parent
+        return None
 
     @classmethod
     def _card_cc(cls, anchor, lid):
-        """Displacement (int cc) for the card owning `anchor`/`lid`, or None.
-        Ascends to the largest ancestor still containing only this listing id,
-        then reads the first '<NNN>cc' in that card's text."""
-        node = anchor
-        card = anchor
-        for _ in range(8):                       # bounded ascent
-            parent = node.parent
-            if parent is None:
-                break
-            ids = {listing_id_from_url(a["href"])
-                   for a in parent.find_all("a", href=True) if "/bike-" in a["href"]}
-            if ids and ids != {lid}:             # parent bleeds into another card
-                break
-            card = parent
-            node = parent
+        """Displacement (int cc) for the card owning `anchor`, or None. Reads the
+        number following the "Engine CC" label inside the card's bkwapper_lot."""
+        card = cls._card_container(anchor)
+        if card is None:
+            return None
         m = cls._CARD_CC_RE.search(card.get_text(" ", strip=True))
-        return int(m.group(1)) if m else None
+        return int(m.group(1).replace(",", "")) if m else None
 
     @classmethod
     def _listings_on_page(cls, html):
