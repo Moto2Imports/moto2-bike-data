@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Browse-mode tests: model-name extraction (⚠ selector UNVERIFIED against live
-markup — these test the PARSER against the ASSUMED td.bkth structure, not real
-koscom HTML) and the end-to-end browse gate in scrape_listing (eligible kept,
-too-new dropped, unknown-year dropped, model read off the page).
+Browse-mode tests: model-name extraction (against koscom's CONFIRMED title-div
+structure, "MAKE / MODEL" in a div styled color:#8c58a2 + font-size:22px) and
+the end-to-end browse gate in scrape_listing (eligible kept, too-new dropped,
+unknown-year dropped, model read off the page).
 
     python3 test_browse_scrape.py
 """
@@ -22,35 +22,42 @@ def _soup(html):
 
 
 # ------------------------------------------------------------ model extraction
-def test_model_row_extracted():
-    html = '<table><tr><td class="bkth">車名</td><td>NSR250R</td></tr></table>'
-    assert extract_model_name(_soup(html)) == "NSR250R"
+# Exact title-div markup captured from a real koscom detail page.
+_REAL_TITLE = ("<div style='margin:5px 0px 5px 0px;font-family:Oswald,Arial;"
+               "color:#8c58a2;font-size:22px'>HONDA / CBR250RR</div>")
 
 
-def test_english_model_label_extracted():
-    html = '<table><tr><td class="bkth">Model</td><td>CBR400RR</td></tr></table>'
-    assert extract_model_name(_soup(html)) == "CBR400RR"
+def test_model_from_real_title_div():
+    # Regression: the real page structure must yield the MODEL, not the make and
+    # not the whole "MAKE / MODEL" string.
+    got = extract_model_name(_soup(_REAL_TITLE))
+    assert got == "CBR250RR", got
+    assert got != "HONDA" and "/" not in got
 
 
-def test_leading_make_token_stripped():
-    html = '<table><tr><td class="bkth">車名</td><td>Honda VFR400R</td></tr></table>'
+def test_model_split_takes_model_side():
+    html = "<div style='color:#8c58a2;font-size:22px'>SUZUKI / GSX-R400</div>"
+    assert extract_model_name(_soup(html)) == "GSX-R400"
+
+
+def test_model_no_slash_falls_back_to_make_strip():
+    html = "<div style='color:#8c58a2;font-size:22px'>Honda VFR400R</div>"
     assert extract_model_name(_soup(html), make="Honda") == "VFR400R"
 
 
-def test_no_model_row_returns_none():
-    html = '<table><tr><td class="bkth">grade</td><td>4</td></tr></table>'
+def test_no_title_div_returns_none():
+    # A div without the color+size style is not the title -> None (kept as Unknown).
+    html = "<div style='font-size:22px'>not the title</div><table><tr><td>4</td></tr></table>"
     assert extract_model_name(_soup(html)) is None
 
 
 # ---------------------------------------------------------- browse-mode scrape
 def _page(model_row=True, era=None):
-    rows = ['<tr><td class="bkth">BDS</td><td>Kantou</td></tr>']
-    if model_row:
-        rows.append('<tr><td class="bkth">車名</td><td>CB400SF</td></tr>')
-    if era:
-        rows.append(f'<tr><td class="bkth">年式</td><td>{era}</td></tr>')
+    title = ("<div style='font-family:Oswald;color:#8c58a2;font-size:22px'>"
+             "Honda / CB400SF</div>") if model_row else ""
+    yr = f'<tr><td class="bkth">年式</td><td>{era}</td></tr>' if era else ""
     return ("<html><body>BDS Kantou 2026-07-22 "
-            "<table>" + "".join(rows) + "</table>"
+            f"{title}<table>{yr}</table>"
             "Frame No. NC31-1012345 12,000 km 200,000 JPY</body></html>")
 
 

@@ -44,9 +44,11 @@ def test_strip_noop_when_absent():
 def _detail(model_row, marker=False, bds=True):
     house = "BDS Kantou" if bds else "Yahoo"
     extra = " SHO LOUIS NOT EQUIPPED" if marker else ""
-    rows = f'<tr><td class="bkth">車名</td><td>{model_row}{extra}</td></tr>'
+    # Model lives in the "MAKE / MODEL" title div (real koscom structure); the
+    # no-title phrase rides in the title, exactly as on a live page.
+    title = (f"<div style='color:#8c58a2;font-size:22px'>Honda / {model_row}{extra}</div>")
     yr = '<tr><td class="bkth">年式</td><td>平成7年</td></tr>'   # 1995, eligible
-    return f"<html><body>{house} 2026-07-22 <table>{rows}{yr}</table> Frame MC28-1012345 12,000 km</body></html>"
+    return f"<html><body>{house} 2026-07-22 {title}<table>{yr}</table> Frame MC28-1012345 12,000 km</body></html>"
 
 
 def _run(html, model=None, browse=False):
