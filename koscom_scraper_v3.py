@@ -18,9 +18,21 @@ Fixes vs v2:
   * BDS-ONLY filter retained.
   * Photos/videos extracted ordered + deduped via koscom_common.
 
+Two scraping phases (see run()):
+  * Phase A — the hand-curated per-model list in models.json. Runs first, so a
+    lot that both a per-model target and the make-browse would return is claimed
+    here with its curated label + vin_prefix/vin_serial_max guards.
+  * Phase B — "browse by make": sweeps every listing for each configured make
+    and keeps only the year-eligible ones (model year present AND at/below the
+    dynamic cutoff = current_year - ELIGIBILITY_WINDOW_YEARS). Discovers the
+    model off the detail page (extract_model_name — see the UNVERIFIED-selector
+    warning there). Enabled via the models.json "browse_by_make" block.
+
 Usage:
-    python3 koscom_scraper_v3.py                 # scrape all models.json entries
-    python3 koscom_scraper_v3.py --model CBR250RR  # single model (testing)
+    python3 koscom_scraper_v3.py                    # Phase A + Phase B → bikes.json
+    python3 koscom_scraper_v3.py --no-browse        # Phase A only
+    python3 koscom_scraper_v3.py --model CBR250RR   # single per-model target (testing)
+    python3 koscom_scraper_v3.py --count-makes      # dry-run: per-make listing counts
 
 Output: bikes.json (same schema your widget already consumes).
 """
@@ -46,11 +58,29 @@ from koscom_common import (
     listing_id_from_url,
     make_session,
     slugify,
+    strip_no_title_marker,
 )
 
-MAX_PAGES_PER_MODEL = 20          # safety cap
+MAX_PAGES_PER_MODEL = 20          # safety cap (per-model searches: small result sets)
+MAX_PAGES_PER_MAKE = 200          # safety cap for whole-make browse/count (much larger)
 REQUEST_DELAY_SECONDS = 1.0       # be polite; this runs once a day
 SEARCH_TIMEOUT = 15
+
+# ---- Import-eligibility cutoff -------------------------------------------
+# ONE source of truth for the model-year eligibility line, recomputed every run
+# (never a hardcoded year). A bike is eligible when its model year is at or
+# before `current_year - ELIGIBILITY_WINDOW_YEARS`. 26 (not 25) is a deliberate
+# one-year conservative buffer so a bike right on the 25-year line — not yet 25
+# for part of the current year — is never surfaced by the broad browse mode.
+# The moto2-site side mirrors this window (siteConfig.stats.eligibilityYears);
+# the two repos can't share a literal constant, so keep both at 26.
+ELIGIBILITY_WINDOW_YEARS = 26
+
+# Browse displacement pre-filter: listings at or below this cc are already
+# covered by the hand-curated per-model list, so Phase B skips them BEFORE
+# fetching any detail page — the cc is read off the search-results card at zero
+# extra request cost. Purely a volume cut; the year gate stays authoritative.
+BROWSE_SKIP_CC_MAX = 250
 
 # Generic JDM frame-number pattern (PREFIX-serial), used when models.json has
 # no vin_prefix. The prefix is 2-6 alphanumerics that must contain BOTH a letter
@@ -99,6 +129,24 @@ def evaluate_vin_serial_bound(page_text, prefix, max_serial):
     if serial >= max_serial:
         return ("skip", None)
     return ("keep", f"{prefix}-{m.group(1)}")
+
+
+def eligibility_cutoff_year(current_year=None):
+    """The model-year eligibility cutoff for THIS run: keep bikes made in or
+    before this year. `current_year - ELIGIBILITY_WINDOW_YEARS`, computed fresh
+    each run (never hardcoded). `current_year` is injectable for tests."""
+    if current_year is None:
+        current_year = datetime.now().year
+    return current_year - ELIGIBILITY_WINDOW_YEARS
+
+
+def passes_year_gate(year, cutoff):
+    """Browse-mode eligibility gate: keep a listing ONLY when a model year is
+    present AND at or below the cutoff. A missing year (None) fails the gate on
+    purpose — browse mode cannot vouch for an unknown-year bike, so those are
+    left to the hand-curated per-model list (which vouches by model identity).
+    This is the ONE place the browse year rule is decided, so it's unit-tested."""
+    return year is not None and year <= cutoff
 
 
 # ---------------------------------------------------------- year extraction --
@@ -198,6 +246,51 @@ def extract_year(soup, page_text):
     return parse_year_from_text(page_text)
 
 
+# ------------------------------------------------------- model-name extraction
+# BROWSE MODE ONLY. Per-model scraping already knows the model from models.json;
+# browse mode discovers listings by make, so it must read the model string off
+# the detail page to label the bike + key moto2-site's model-lookup.json.
+#
+# ⚠️ UNVERIFIED SELECTOR — written against the same td.bkth spec-table structure
+# the grades/year rows use, plus the known JP label vocabulary (車名 = vehicle
+# name, 車種 = model type, 型式 = type/designation). It has NOT been checked
+# against a real listing (site unreachable from the build env, no HTML fixture).
+# MUST be validated on live markup before browse output is trusted — see README.
+MODEL_LABELS = ("model", "model name", "vehicle name", "vehicle model",
+                "車名", "車種", "型式", "車名・型式")
+
+
+def extract_model_name(soup, make=None):
+    """Best-effort raw model string from a listing detail page (browse mode).
+    Returns the string, or None when no model row is found (caller labels it
+    'Unknown' and flags it — never silently drops). If `make` is given and the
+    value repeats it as a leading token, that token is stripped so the raw model
+    matches the koscom search-name style the lookup is keyed on. UNVERIFIED."""
+    for label_td in soup.find_all("td", class_="bkth"):
+        label = label_td.get_text(" ", strip=True).lower()
+        if any(k in label for k in MODEL_LABELS):
+            value_td = label_td.find_next_sibling("td")
+            if not value_td:
+                continue
+            val = re.sub(r"\s+", " ", value_td.get_text(" ", strip=True)).strip()
+            if not val:
+                continue
+            if make and val.lower().startswith(make.lower() + " "):
+                val = val[len(make) + 1:].strip()
+            return val or None
+    return None
+
+
+def extract_auction_house(page_text):
+    """The BDS auction house string (e.g. 'BDS Kantou'), bare 'BDS' when only the
+    marker is present, or None when this isn't a BDS auction. Single source for
+    the BDS-only filter, shared by scrape_listing and the model-research tool."""
+    m = re.search(r"\bBDS[\s\u00a0]+[A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", page_text)
+    if m:
+        return re.sub(r"\s+", " ", m.group(0)).strip()
+    return "BDS" if "BDS" in page_text else None
+
+
 # --------------------------------------------------------- photo filtering --
 # Auction photos arrive as a fixed 33-slot set: a 9-slot hero grid on the
 # tru.ru / ajes CDNs (whole-bike shots ~1-6, accessory/extra ~7-9) followed by
@@ -269,6 +362,21 @@ def load_models(path="models.json"):
     return data["models"] if isinstance(data, dict) else data
 
 
+def load_browse_config(path="models.json"):
+    """The 'browse_by_make' config block ({"makes": [...]}) or None if absent.
+    Browse mode sweeps every listing for each make and keeps only the
+    year-eligible ones; the cutoff is ELIGIBILITY_WINDOW_YEARS, not config, to
+    keep a single source of truth."""
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    cfg = data.get("browse_by_make") if isinstance(data, dict) else None
+    if cfg and cfg.get("makes"):
+        return cfg
+    return None
+
+
 class KoscomScraperV3:
     def __init__(self):
         self.session = make_session()
@@ -276,11 +384,68 @@ class KoscomScraperV3:
         self.seen_listing_ids = set()   # <-- dedup across the entire run
 
     # ------------------------------------------------------------------ search
-    def search_listing_urls(self, make, model):
-        """Walk paginated search results; return unique listing URLs."""
-        urls = []
-        for page in range(1, MAX_PAGES_PER_MODEL + 1):
-            params = {"manuf": make, "model": model, "page": page}
+    # Displacement is read from the real koscom results-card structure:
+    #   <div class=bkwapper_lot> ... <div class=info3> ...
+    #       <font ...>Engine CC</font> &nbsp; 100<br> ... </div> ... </div>
+    # i.e. each card is a `bkwapper_lot` div, and the cc is the number that
+    # FOLLOWS the literal "Engine CC" label (NOT a `cc`-suffixed token — the "CC"
+    # is in the label, before the value). FAILS OPEN: an unreadable cc yields
+    # None -> the listing is kept/queued, never skipped, so correctness never
+    # depends on it (the detail-page year gate is authoritative).
+    _CARD_CC_RE = re.compile(r"Engine\s*CC[\s *:]*([\d,]{1,6})", re.IGNORECASE)
+
+    @staticmethod
+    def _card_container(anchor):
+        """The listing card owning `anchor` — the nearest `bkwapper_lot`
+        ancestor — or None if the card structure isn't recognised."""
+        for parent in anchor.parents:
+            if "bkwapper_lot" in (parent.get("class") or []):
+                return parent
+        return None
+
+    @classmethod
+    def _card_cc(cls, anchor, lid):
+        """Displacement (int cc) for the card owning `anchor`, or None. Reads the
+        number following the "Engine CC" label inside the card's bkwapper_lot."""
+        card = cls._card_container(anchor)
+        if card is None:
+            return None
+        m = cls._CARD_CC_RE.search(card.get_text(" ", strip=True))
+        return int(m.group(1).replace(",", "")) if m else None
+
+    @classmethod
+    def _listings_on_page(cls, html):
+        """(listing_id, full_url, cc) triples on one search-results page, deduped
+        within the page in document order. A single bike has several anchors
+        (thumbnail/title/price), so per-page dedup is essential. `cc` is the
+        card's displacement (int) or None when unreadable."""
+        soup = BeautifulSoup(html, "html.parser")
+        out, seen = [], set()
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "/bike-" in href:
+                lid = listing_id_from_url(href)
+                if lid not in seen:
+                    seen.add(lid)
+                    full = href if href.startswith("http") else KOSCOM_BASE_URL + href
+                    out.append((lid, full, cls._card_cc(a, lid)))
+        return out
+
+    def _paginate_search(self, params_base, exclude_seen=True,
+                         max_pages=MAX_PAGES_PER_MODEL):
+        """Walk `?<params_base>&page=1,2,...`, yielding (listing_id, url).
+
+        Termination keys on ids not yet seen in THIS pagination, so it stops on
+        a genuinely empty page AND on koscom re-serving the last page past the
+        end (every id already local-seen) — without stopping early just because
+        a page's lots were all claimed by an earlier phase.
+
+        `exclude_seen` (default) skips ids already in self.seen_listing_ids so
+        Phase A (per-model) keeps first claim over Phase B (browse). The
+        standalone counter passes exclude_seen=False to count the whole make."""
+        local_seen = set()
+        for page in range(1, max_pages + 1):
+            params = {**params_base, "page": page}
             url = f"{KOSCOM_BASE_URL}/bike?{urlencode(params)}"
             try:
                 resp = self.session.get(url, timeout=SEARCH_TIMEOUT)
@@ -288,33 +453,96 @@ class KoscomScraperV3:
             except Exception as e:
                 print(f"[ERROR] search page {page} failed: {e}")
                 break
-
-            soup = BeautifulSoup(resp.text, "html.parser")
-            page_ids = set()
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                if "/bike-" in href:
-                    lid = listing_id_from_url(href)
-                    if lid not in self.seen_listing_ids and lid not in page_ids:
-                        page_ids.add(lid)
-                        full = href if href.startswith("http") else KOSCOM_BASE_URL + href
-                        urls.append(full)
-
-            if not page_ids:            # no NEW listings -> done paginating
+            rows = self._listings_on_page(resp.text)
+            if page == 1 and not rows:
+                # Page 1 with zero listing anchors = the query returned a
+                # non-results page (form/landing/redirect/error), NOT a genuinely
+                # empty make. Say so loudly instead of silently reporting 0.
+                status = getattr(resp, "status_code", "?")
+                final = getattr(resp, "url", url)
+                redir = f" -> redirected to {final}" if final != url else ""
+                print(f"[WARN] {url}: HTTP {status}, 0 listing anchors on "
+                      f"page 1{redir} — query returned no results (check params)")
+            fresh = [(lid, full, cc) for (lid, full, cc) in rows if lid not in local_seen]
+            if not fresh:               # empty page or last-page repeat -> done
                 break
-            self.seen_listing_ids.update(page_ids)
+            for lid, full, cc in fresh:
+                local_seen.add(lid)
+                if exclude_seen and lid in self.seen_listing_ids:
+                    continue
+                yield lid, full, cc
             time.sleep(REQUEST_DELAY_SECONDS)
 
+    def search_listing_urls(self, make, model):
+        """Phase A: paginated per-model search; unique, not-yet-claimed URLs.
+        No displacement filter here — the curated list intentionally includes
+        small-cc targets."""
+        urls = []
+        for lid, full, _cc in self._paginate_search({"manuf": make, "model": model},
+                                                     exclude_seen=True,
+                                                     max_pages=MAX_PAGES_PER_MODEL):
+            self.seen_listing_ids.add(lid)
+            urls.append(full)
         print(f"[SEARCH] {make} {model}: {len(urls)} unique listings")
         return urls
 
+    @staticmethod
+    def _browse_params(make, cutoff):
+        """koscom's confirmed make-browse query (from its own search UI):
+        manuf + max_year + force=1. `force=1` is REQUIRED — without it koscom
+        shows a warning/landing page for a search this broad (no listings).
+        `max_year` is a server-side PRE-FILTER to cut fetch volume; it is NOT
+        trusted for correctness — scrape_listing's client-side year gate stays
+        authoritative regardless of koscom's max_year semantics."""
+        return {"manuf": make, "max_year": cutoff, "force": 1}
+
+    def browse_make_urls(self, make, cutoff):
+        """Phase B: sweep a make's listings (koscom pre-filtered to <= cutoff);
+        unique URLs not already claimed by Phase A, with cards at/below
+        BROWSE_SKIP_CC_MAX skipped BEFORE any detail fetch (curated list covers
+        them). Unreadable cc -> kept (fail open)."""
+        urls, skipped = [], 0
+        for lid, full, cc in self._paginate_search(self._browse_params(make, cutoff),
+                                                   exclude_seen=True,
+                                                   max_pages=MAX_PAGES_PER_MAKE):
+            if cc is not None and cc <= BROWSE_SKIP_CC_MAX:
+                skipped += 1
+                continue                         # ≤250cc: covered by curated list
+            self.seen_listing_ids.add(lid)
+            urls.append(full)
+        print(f"[BROWSE] {make}: {len(urls)} listings to gate "
+              f"(skipped {skipped} at <={BROWSE_SKIP_CC_MAX}cc before any fetch)")
+        return urls
+
+    def count_make_listings(self, make, cutoff):
+        """Dry-run counter (no detail fetches): distinct listings koscom returns
+        for a make at max_year<=cutoff, AFTER the displacement card pre-filter
+        (BROWSE_SKIP_CC_MAX) — i.e. the detail pages Phase B would actually
+        fetch. Reports raw and skipped counts too. Ignores seen/claimed state."""
+        to_fetch, skipped = 0, 0
+        for _lid, _full, cc in self._paginate_search(self._browse_params(make, cutoff),
+                                                     exclude_seen=False,
+                                                     max_pages=MAX_PAGES_PER_MAKE):
+            if cc is not None and cc <= BROWSE_SKIP_CC_MAX:
+                skipped += 1
+            else:
+                to_fetch += 1
+        print(f"[COUNT] {make}: {to_fetch} to fetch (>{BROWSE_SKIP_CC_MAX}cc or "
+              f"cc-unknown) + {skipped} skipped at <={BROWSE_SKIP_CC_MAX}cc "
+              f"= {to_fetch + skipped} raw at max_year<={cutoff}")
+        return to_fetch
+
     # ----------------------------------------------------------------- scrape
     def scrape_listing(self, url, make, model, vin_prefix=None, engine_cc=None,
-                       vin_serial_max=None):
+                       vin_serial_max=None, browse_mode=False, cutoff_year=None):
         # `model` is BOTH the koscom search string AND the raw feed name written
         # to bikes.json — the site (moto2-site) keys model-lookup.json on this
         # exact string to attach the canonical model + trim + chassis for
         # display, so it must stay the raw search string, never a display label.
+        #
+        # BROWSE MODE (browse_mode=True, model passed as None): the model isn't
+        # known up front, so it's read off the detail page; the listing is kept
+        # ONLY when its model year is present and <= cutoff_year (passes_year_gate).
         try:
             resp = self.session.get(url, timeout=SEARCH_TIMEOUT)
             resp.encoding = "utf-8"
@@ -328,19 +556,35 @@ class KoscomScraperV3:
         listing_id = listing_id_from_url(url)
 
         # ---- BDS-only filter, and EXTRACT the house (never hardcode it)
-        house_match = re.search(r"\bBDS[\s\u00a0]+[A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", page_text)
-        if not house_match:
-            if "BDS" not in page_text:
-                print(f"[SKIP] {listing_id}: not a BDS auction")
-                return None
-            auction_house = "BDS"
-        else:
-            auction_house = re.sub(r"\s+", " ", house_match.group(0)).strip()
+        auction_house = extract_auction_house(page_text)
+        if auction_house is None:
+            print(f"[SKIP] {listing_id}: not a BDS auction")
+            return None
 
         # ---- Title / registration certificate present? koscom marks bikes sold
         # WITHOUT their certificate as "SHO LOUIS NOT EQUIPPED" (in the model
-        # title). Scanned over the whole page and surfaced as a boolean.
+        # title). Scanned over the whole page (location-agnostic) and surfaced as
+        # a boolean, applied to EVERY listing regardless of pipeline.
         has_title = not has_no_title_marker(page_text)
+
+        # ---- Model year (Japanese era → Gregorian int; None if not found).
+        # Extracted up front because browse mode gates on it before doing any
+        # further (photo-fetching) work.
+        year = extract_year(soup, page_text)
+
+        # ---- BROWSE MODE: discover the model + apply the eligibility year gate.
+        # Keep ONLY when the year is present and at/below the cutoff; a missing
+        # or too-new year is discarded here (the curated per-model list covers
+        # unknown-year eligible bikes). Per-model scraping skips this entirely.
+        if browse_mode:
+            model = extract_model_name(soup, make) or "Unknown"
+            # keep the no-title phrase out of the displayed model name; the
+            # hasTitle flag carries the fact.
+            model = strip_no_title_marker(model)[0] or "Unknown"
+            if not passes_year_gate(year, cutoff_year):
+                print(f"[SKIP] {listing_id}: {make} {model} — year {year!r} "
+                      f"fails eligibility gate (need present and <= {cutoff_year})")
+                return None
 
         # ---- VIN
         vin = "Unknown"
@@ -405,9 +649,6 @@ class KoscomScraperV3:
         dm = re.search(r"\b(\d{4}[-/]\d{2}[-/]\d{2})\b", page_text)
         if dm:
             auction_date = dm.group(1).replace("/", "-")
-
-        # ---- Model year (Japanese era → Gregorian int; None if not found)
-        year = extract_year(soup, page_text)
 
         # ---- Condition grades (extracted; 0 = not found on page)
         condition_grades = {k: 0 for k in
@@ -486,8 +727,26 @@ class KoscomScraperV3:
               f"{'' if has_title else ' — [NO TITLE]'}")
         return bike
 
+    # ------------------------------------------------------------- dry-run count
+    def count_makes(self):
+        """Dry-run: print distinct listing counts per make + total. No detail
+        fetches, no scraping, no bikes.json write. Sizes the browse population
+        before a full run."""
+        cfg = load_browse_config()
+        makes = cfg["makes"] if cfg else ["Honda", "Kawasaki", "Suzuki", "Yamaha"]
+        cutoff = eligibility_cutoff_year()
+        print(f"[COUNT] {datetime.now().isoformat()} — dry-run over {len(makes)} "
+              f"make(s), max_year<={cutoff}")
+        total = 0
+        for make in makes:
+            total += self.count_make_listings(make, cutoff)
+        print(f"[COUNT] TOTAL detail-fetches Phase B would make: {total} "
+              f"(>{BROWSE_SKIP_CC_MAX}cc, max_year<={cutoff}; the client year-gate "
+              f"trims this further to the eligible set)")
+        return total
+
     # -------------------------------------------------------------------- run
-    def run(self, only_model=None):
+    def run(self, only_model=None, browse=True):
         models = load_models()
         if only_model:
             models = [m for m in models
@@ -496,7 +755,11 @@ class KoscomScraperV3:
                 print(f"[FATAL] model '{only_model}' not in models.json")
                 sys.exit(1)
 
-        print(f"[START] {datetime.now().isoformat()} — {len(models)} model(s)")
+        # ---- Phase A: hand-curated per-model targets. Runs FIRST so a lot that
+        # both a per-model target and the make-browse would return is claimed
+        # here — with its curated model label + vin_prefix/vin_serial_max guards
+        # — before Phase B can pick it up (dedup via self.seen_listing_ids).
+        print(f"[START] {datetime.now().isoformat()} — Phase A: {len(models)} model(s)")
         for spec in models:
             make, model = spec["make"], spec["model"]
             vin_prefix = spec.get("vin_prefix")
@@ -508,6 +771,25 @@ class KoscomScraperV3:
                 if bike:
                     self.bikes.append(bike)
                 time.sleep(REQUEST_DELAY_SECONDS)
+        phase_a = len(self.bikes)
+
+        # ---- Phase B: browse-by-make. Sweeps everything per make and keeps only
+        # year-eligible lots (year present AND <= cutoff) not already claimed by
+        # Phase A. Skipped for single-model test runs and when --no-browse is set.
+        browse_cfg = load_browse_config()
+        if browse and browse_cfg and not only_model:
+            cutoff = eligibility_cutoff_year()
+            makes = browse_cfg["makes"]
+            print(f"[START] Phase B: browse {len(makes)} make(s) — "
+                  f"cutoff year {cutoff} (keep year present AND <= {cutoff})")
+            for make in makes:
+                for url in self.browse_make_urls(make, cutoff):
+                    bike = self.scrape_listing(url, make, None, browse_mode=True,
+                                               cutoff_year=cutoff)
+                    if bike:
+                        self.bikes.append(bike)
+                    time.sleep(REQUEST_DELAY_SECONDS)
+            print(f"[BROWSE] Phase B added {len(self.bikes) - phase_a} year-eligible bikes")
 
         out = {
             "lastUpdated": datetime.now().isoformat(),
@@ -522,6 +804,14 @@ class KoscomScraperV3:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", help="scrape a single model for testing")
+    ap.add_argument("--model", help="scrape a single per-model target (testing)")
+    ap.add_argument("--no-browse", action="store_true",
+                    help="Phase A only; skip the browse-by-make sweep")
+    ap.add_argument("--count-makes", action="store_true",
+                    help="dry-run: count distinct listings per make and exit "
+                         "(no detail fetches, no bikes.json write)")
     args = ap.parse_args()
-    KoscomScraperV3().run(only_model=args.model)
+    if args.count_makes:
+        KoscomScraperV3().count_makes()
+    else:
+        KoscomScraperV3().run(only_model=args.model, browse=not args.no_browse)

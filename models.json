@@ -119,42 +119,12 @@
     },
     {
       "make": "Honda",
-      "model": "NSR50-1",
+      "model": "NSR50",
       "engine_cc": 50
     },
     {
       "make": "Honda",
-      "model": "NSR50-2",
-      "engine_cc": 50
-    },
-    {
-      "make": "Honda",
-      "model": "NSR50-3",
-      "engine_cc": 50
-    },
-    {
-      "make": "Honda",
-      "model": "NSR50-4",
-      "engine_cc": 50
-    },
-    {
-      "make": "Honda",
-      "model": "NSR80-1",
-      "engine_cc": 80
-    },
-    {
-      "make": "Honda",
-      "model": "NSR80-2",
-      "engine_cc": 80
-    },
-    {
-      "make": "Honda",
-      "model": "NSR80-3",
-      "engine_cc": 80
-    },
-    {
-      "make": "Honda",
-      "model": "NSR80-4",
+      "model": "NSR80",
       "engine_cc": 80
     },
     {
@@ -186,20 +156,8 @@
     },
     {
       "make": "Honda",
-      "model": "NSR250R-2SP",
-      "display_name": "Honda NSR250 MC18 SP",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
       "model": "NSR250R-3",
       "display_name": "Honda NSR250 MC18-II",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-3SP",
-      "display_name": "Honda NSR250 MC18-II SP",
       "engine_cc": 250
     },
     {
@@ -216,26 +174,8 @@
     },
     {
       "make": "Honda",
-      "model": "NSR250R-4SP",
-      "display_name": "Honda NSR250 MC21 SP",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
       "model": "NSR250R-5",
       "display_name": "Honda NSR250 MC28 R",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-5SE",
-      "display_name": "Honda NSR250 MC28 SE",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
-      "model": "NSR250R-5SP",
-      "display_name": "Honda NSR250 MC28 SP",
       "engine_cc": 250
     },
     {
@@ -395,32 +335,7 @@
     },
     {
       "make": "Suzuki",
-      "model": "RGV250-1",
-      "display_name": "Suzuki RGV250 VJ21",
-      "engine_cc": 250
-    },
-    {
-      "make": "Suzuki",
-      "model": "RGV250-1SP",
-      "display_name": "Suzuki RGV250 VJ21 SP",
-      "engine_cc": 250
-    },
-    {
-      "make": "Suzuki",
-      "model": "RGV250-2",
-      "display_name": "Suzuki RGV250 VJ22",
-      "engine_cc": 250
-    },
-    {
-      "make": "Suzuki",
-      "model": "RGV250-2SP",
-      "display_name": "Suzuki RGV250 VJ22 SP",
-      "engine_cc": 250
-    },
-    {
-      "make": "Suzuki",
-      "model": "RGV250-3",
-      "display_name": "Suzuki RGV250 VJ23 SP",
+      "model": "RGV250",
       "engine_cc": 250
     },
     {
@@ -625,5 +540,14 @@
       "display_name": "Yamaha TZR250 SPR",
       "engine_cc": 250
     }
-  ]
+  ],
+  "browse_by_make": {
+    "_comment": "Phase B 'browse by make' mode: sweep every koscom listing per make and keep only the year-eligible ones (model year present AND <= current_year - 26). The cutoff window lives in the scraper (ELIGIBILITY_WINDOW_YEARS), not here, so there is one source of truth; this block only lists the makes to sweep. Phase A (the per-model list above) runs first and claims overlapping lots, so browse never double-emits them.",
+    "makes": [
+      "Honda",
+      "Kawasaki",
+      "Suzuki",
+      "Yamaha"
+    ]
+  }
 }
