@@ -38,6 +38,41 @@ MEDIA_HEADERS = {
     "Referer": KOSCOM_BASE_URL + "/",
 }
 
+# ---- "No title / registration certificate not included" marker --------------
+# koscom tags such listings with the phrase "SHO LOUIS NOT EQUIPPED", which
+# appears as part of the displayed model name/title (e.g. "HONDA / CRF250L SHO
+# LOUIS NOT EQUIPPED"). It means the bike ships WITHOUT its title/registration
+# certificate — material for a buyer — so we surface it as a boolean flag and
+# strip the phrase out of the displayed model name.
+#
+# Detection runs over the whole page text (location-agnostic); confirmed on a
+# live listing to sit in the title, so a whole-page scan reliably catches it.
+# Case-insensitive, whitespace-tolerant. Add sibling wordings here as they
+# surface in real data.
+NO_TITLE_PATTERNS = (
+    r"SHO\s+LOUIS\s+NOT\s+EQUIPPED",
+)
+NO_TITLE_RE = re.compile("|".join(NO_TITLE_PATTERNS), re.IGNORECASE)
+
+
+def has_no_title_marker(text):
+    """True when `text` contains a no-title marker (SHO LOUIS NOT EQUIPPED / a
+    listed variant). Safe on None/empty."""
+    return bool(text) and NO_TITLE_RE.search(text) is not None
+
+
+def strip_no_title_marker(text):
+    """Return (clean_text, had_marker): remove the no-title marker and tidy any
+    orphaned separators/whitespace, so the phrase never rides along in the
+    displayed model name (the boolean flag carries the fact instead)."""
+    if not text:
+        return text, False
+    if NO_TITLE_RE.search(text) is None:
+        return text, False
+    cleaned = NO_TITLE_RE.sub(" ", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -–—/·,")
+    return cleaned, True
+
 
 class LegacySSLAdapter(HTTPAdapter):
     """Requests adapter that tolerates legacy TLS servers (bdsc.jupiter.ac).
