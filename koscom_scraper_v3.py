@@ -42,6 +42,7 @@ from koscom_common import (
     MEDIA_HEADERS,
     extract_photos,
     extract_videos,
+    has_no_title_marker,
     listing_id_from_url,
     make_session,
     slugify,
@@ -336,6 +337,11 @@ class KoscomScraperV3:
         else:
             auction_house = re.sub(r"\s+", " ", house_match.group(0)).strip()
 
+        # ---- Title / registration certificate present? koscom marks bikes sold
+        # WITHOUT their certificate as "SHO LOUIS NOT EQUIPPED" (in the model
+        # title). Scanned over the whole page and surfaced as a boolean.
+        has_title = not has_no_title_marker(page_text)
+
         # ---- VIN
         vin = "Unknown"
         if vin_prefix:
@@ -458,6 +464,7 @@ class KoscomScraperV3:
             "make": make,
             "model": model,
             "year": year,
+            "hasTitle": has_title,
             "vin": vin,
             "mileage": mileage,
             "price": price,
@@ -475,7 +482,8 @@ class KoscomScraperV3:
             "url": url,
         }
         print(f"[OK] {make} {model} {vin} — {mileage:,}km — ¥{price:,} — "
-              f"{len(photos)} photos / {len(videos)} videos — {auction_house}")
+              f"{len(photos)} photos / {len(videos)} videos — {auction_house}"
+              f"{'' if has_title else ' — [NO TITLE]'}")
         return bike
 
     # -------------------------------------------------------------------- run
