@@ -251,33 +251,30 @@ def extract_year(soup, page_text):
 # browse mode discovers listings by make, so it must read the model string off
 # the detail page to label the bike + key moto2-site's model-lookup.json.
 #
-# ⚠️ UNVERIFIED SELECTOR — written against the same td.bkth spec-table structure
-# the grades/year rows use, plus the known JP label vocabulary (車名 = vehicle
-# name, 車種 = model type, 型式 = type/designation). It has NOT been checked
-# against a real listing (site unreachable from the build env, no HTML fixture).
-# MUST be validated on live markup before browse output is trusted — see README.
-MODEL_LABELS = ("model", "model name", "vehicle name", "vehicle model",
-                "車名", "車種", "型式", "車名・型式")
+# The model name is the title div, rendered "MAKE / MODEL" and pinned by its
+# inline style (purple color:#8c58a2 + font-size:22px). Confirmed on a real
+# detail page:
+#   <div style='…color:#8c58a2;font-size:22px'>HONDA / CBR250RR</div>
+# We split on " / " and take the model side (the make is already known).
+_MODEL_TITLE_STYLE = ("color:#8c58a2", "font-size:22px")
 
 
 def extract_model_name(soup, make=None):
-    """Best-effort raw model string from a listing detail page (browse mode).
-    Returns the string, or None when no model row is found (caller labels it
-    'Unknown' and flags it — never silently drops). If `make` is given and the
-    value repeats it as a leading token, that token is stripped so the raw model
-    matches the koscom search-name style the lookup is keyed on. UNVERIFIED."""
-    for label_td in soup.find_all("td", class_="bkth"):
-        label = label_td.get_text(" ", strip=True).lower()
-        if any(k in label for k in MODEL_LABELS):
-            value_td = label_td.find_next_sibling("td")
-            if not value_td:
-                continue
-            val = re.sub(r"\s+", " ", value_td.get_text(" ", strip=True)).strip()
-            if not val:
-                continue
-            if make and val.lower().startswith(make.lower() + " "):
-                val = val[len(make) + 1:].strip()
-            return val or None
+    """Raw model string from a listing detail page's title div (browse mode), or
+    None when it isn't found (caller labels it 'Unknown' and flags it — never
+    silently drops). The title reads "MAKE / MODEL"; we return just MODEL."""
+    for div in soup.find_all("div", style=True):
+        style = div["style"].replace(" ", "")
+        if not all(tok in style for tok in _MODEL_TITLE_STYLE):
+            continue
+        text = re.sub(r"\s+", " ", div.get_text(" ", strip=True)).strip()
+        if not text:
+            continue
+        if " / " in text:                       # "HONDA / CBR250RR" -> "CBR250RR"
+            text = text.split(" / ", 1)[1].strip()
+        elif make and text.lower().startswith(make.lower() + " "):
+            text = text[len(make) + 1:].strip()
+        return text or None
     return None
 
 
