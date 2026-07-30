@@ -102,28 +102,48 @@ def _capture_urls(pages):
     return s, urls
 
 
-def test_browse_query_carries_force_and_max_year():
-    # The confirmed koscom make-browse query: manuf + max_year + force=1.
+def test_browse_query_carries_bds_filter_force_and_max_year():
+    # The confirmed koscom make-browse query mirrors the UI:
+    # manuf + chk_w13=on (BDS-only) + max_year + force=1.
     s, urls = _capture_urls({1: ["1001"], 2: []})
     s.browse_make_urls("Honda", 2000)
     assert urls, "no request made"
-    assert all("manuf=Honda" in u and "max_year=2000" in u and "force=1" in u
+    assert all("manuf=Honda" in u and "chk_w13=on" in u
+               and "max_year=2000" in u and "force=1" in u
                for u in urls), urls
 
 
-def test_counter_query_carries_force_and_max_year():
+def test_browse_query_omits_min_year_by_default():
+    # BROWSE_MIN_YEAR is None => no lower bound => pre-1990 bikes still returned.
+    s, urls = _capture_urls({1: ["1001"], 2: []})
+    s.browse_make_urls("Honda", 2000)
+    assert all("min_year" not in u for u in urls), urls
+
+
+def test_browse_query_includes_min_year_when_configured(monkeypatch):
+    # Setting a floor (only if a live run ever proves the backend needs one)
+    # threads through to the query.
+    monkeypatch.setattr(sc, "BROWSE_MIN_YEAR", 1975)
+    s, urls = _capture_urls({1: ["1001"], 2: []})
+    s.browse_make_urls("Honda", 2000)
+    assert all("min_year=1975" in u for u in urls), urls
+
+
+def test_counter_query_carries_bds_filter_force_and_max_year():
     s, urls = _capture_urls({1: ["1001"], 2: []})
     s.count_make_listings("Kawasaki", 2004)
-    assert all("manuf=Kawasaki" in u and "max_year=2004" in u and "force=1" in u
+    assert all("manuf=Kawasaki" in u and "chk_w13=on" in u
+               and "max_year=2004" in u and "force=1" in u
                for u in urls), urls
 
 
-def test_per_model_query_has_no_force_or_max_year():
-    # Per-model search is unchanged: model present, no force/max_year.
+def test_per_model_query_has_no_browse_filters():
+    # Per-model search is unchanged: model present, no force/max_year/chk_w13.
     s, urls = _capture_urls({1: ["2001"], 2: []})
     s.search_listing_urls("Honda", "CBR250RR")
     assert any("model=CBR250RR" in u for u in urls), urls
-    assert all("force=" not in u and "max_year=" not in u for u in urls), urls
+    assert all("force=" not in u and "max_year=" not in u and "chk_w13" not in u
+               for u in urls), urls
 
 
 # ---- displacement (cc) card pre-filter ------------------------------------
