@@ -82,18 +82,19 @@ ELIGIBILITY_WINDOW_YEARS = 26
 # extra request cost. Purely a volume cut; the year gate stays authoritative.
 BROWSE_SKIP_CC_MAX = 250
 
-# Browse year floor (koscom `min_year`). Set to 1990 to match koscom's confirmed
-# working search URL EXACTLY. A live run proved that OMITTING min_year makes
-# koscom return a house-skewed subset (Honda browse came back Kantou-only) that
-# pagination never fully covers, so Kansai/Kyushu BDS lots were never fetched.
-# Sending min_year=1990 (as the real UI does) restores full house coverage.
-# TODO(verify): koscom's UI floors its dropdown at 1990, but the backend may
-# accept a lower value — if a live run confirms e.g. min_year=1970 still returns
-# all houses, drop this to include pre-1990 eligible bikes; if the backend clamps
-# back to the skewed behaviour below some threshold, add a second pre-1990 query
-# pass. None = omit the param (do NOT use until the coverage regression is fixed).
+# Browse year floor (koscom `min_year`). Sending min_year is REQUIRED for full
+# auction-house coverage: a live run with min_year OMITTED returned a house-skewed
+# subset (Honda browse came back Kantou-only) that pagination never fully covers,
+# so Kansai/Kyushu BDS lots were never fetched. min_year=1990 (matching koscom's
+# UI exactly) was confirmed on a live run to restore full coverage across
+# Kantou/Kansai/Kyushu and recover every previously-missing lot.
+# UNDER TEST: koscom's UI floors its dropdown at 1990, but the backend may accept
+# a lower value. Set to 1970 to test whether a lower floor STILL returns all
+# houses (which would also capture pre-1990 eligible bikes). If a live run shows
+# 1970 keeps full house coverage, keep it; if it clamps back to the Kantou-skewed
+# behaviour, revert to 1990 and add a second pre-1990 query pass (two-pass).
 # max_year still caps the top; scrape_listing's client year gate is authoritative.
-BROWSE_MIN_YEAR = 1990
+BROWSE_MIN_YEAR = 1970
 
 # Generic JDM frame-number pattern (PREFIX-serial), used when models.json has
 # no vin_prefix. The prefix is 2-6 alphanumerics that must contain BOTH a letter
