@@ -113,11 +113,13 @@ def test_browse_query_carries_bds_filter_force_and_max_year():
                for u in urls), urls
 
 
-def test_browse_query_omits_min_year_by_default():
-    # BROWSE_MIN_YEAR is None => no lower bound => pre-1990 bikes still returned.
+def test_browse_query_carries_min_year_default_1990():
+    # BROWSE_MIN_YEAR defaults to 1990 to match koscom's confirmed working search
+    # URL exactly (min_year=1990); without it koscom returns a house-skewed subset
+    # that pagination never fully covers.
     s, urls = _capture_urls({1: ["1001"], 2: []})
     s.browse_make_urls("Honda", 2000)
-    assert all("min_year" not in u for u in urls), urls
+    assert all("min_year=1990" in u for u in urls), urls
 
 
 def test_browse_query_includes_min_year_when_configured(monkeypatch):
