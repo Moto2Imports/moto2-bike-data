@@ -88,11 +88,12 @@ BROWSE_SKIP_CC_MAX = 250
 # so Kansai/Kyushu BDS lots were never fetched. min_year=1990 (matching koscom's
 # UI exactly) was confirmed on a live run to restore full coverage across
 # Kantou/Kansai/Kyushu and recover every previously-missing lot.
-# UNDER TEST: koscom's UI floors its dropdown at 1990, but the backend may accept
-# a lower value. Set to 1970 to test whether a lower floor STILL returns all
-# houses (which would also capture pre-1990 eligible bikes). If a live run shows
-# 1970 keeps full house coverage, keep it; if it clamps back to the Kantou-skewed
-# behaviour, revert to 1990 and add a second pre-1990 query pass (two-pass).
+# Value is 1970, CONFIRMED on a live run: koscom's UI floors its dropdown at 1990,
+# but the backend accepts a lower value. min_year=1970 keeps full house coverage
+# (Phase B: Kantou 122 / Kansai 46 / Kyushu 13, no collapse) AND additionally
+# captures 55 pre-1990 eligible classics (year 1971-1989: CB750, W3, GSX750S
+# Katana, etc.) that min_year=1990 would have excluded. Do NOT raise back toward
+# 1990 (loses pre-1990 inventory) or omit it (regresses to the Kantou-only skew).
 # max_year still caps the top; scrape_listing's client year gate is authoritative.
 BROWSE_MIN_YEAR = 1970
 
