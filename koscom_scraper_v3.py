@@ -82,6 +82,21 @@ ELIGIBILITY_WINDOW_YEARS = 26
 # extra request cost. Purely a volume cut; the year gate stays authoritative.
 BROWSE_SKIP_CC_MAX = 250
 
+# Browse year floor (koscom `min_year`). Sending min_year is REQUIRED for full
+# auction-house coverage: a live run with min_year OMITTED returned a house-skewed
+# subset (Honda browse came back Kantou-only) that pagination never fully covers,
+# so Kansai/Kyushu BDS lots were never fetched. min_year=1990 (matching koscom's
+# UI exactly) was confirmed on a live run to restore full coverage across
+# Kantou/Kansai/Kyushu and recover every previously-missing lot.
+# Value is 1970, CONFIRMED on a live run: koscom's UI floors its dropdown at 1990,
+# but the backend accepts a lower value. min_year=1970 keeps full house coverage
+# (Phase B: Kantou 122 / Kansai 46 / Kyushu 13, no collapse) AND additionally
+# captures 55 pre-1990 eligible classics (year 1971-1989: CB750, W3, GSX750S
+# Katana, etc.) that min_year=1990 would have excluded. Do NOT raise back toward
+# 1990 (loses pre-1990 inventory) or omit it (regresses to the Kantou-only skew).
+# max_year still caps the top; scrape_listing's client year gate is authoritative.
+BROWSE_MIN_YEAR = 1970
+
 # Generic JDM frame-number pattern (PREFIX-serial), used when models.json has
 # no vin_prefix. The prefix is 2-6 alphanumerics that must contain BOTH a letter
 # and a digit, so it matches:
@@ -485,13 +500,22 @@ class KoscomScraperV3:
 
     @staticmethod
     def _browse_params(make, cutoff):
-        """koscom's confirmed make-browse query (from its own search UI):
-        manuf + max_year + force=1. `force=1` is REQUIRED — without it koscom
-        shows a warning/landing page for a search this broad (no listings).
-        `max_year` is a server-side PRE-FILTER to cut fetch volume; it is NOT
+        """koscom's confirmed make-browse query, mirroring its search UI:
+        manuf + chk_w13=on + max_year + force=1 (verified against a real result
+        set). `chk_w13=on` is koscom's BDS-only server-side filter — the critical
+        change from the old broad sweep: without it koscom returns the make's
+        ENTIRE catalogue (BDS + non-BDS, every displacement), burying the few
+        dozen real BDS lots among thousands so pagination/ordering never reaches
+        them. With it, koscom returns just the BDS set the UI shows, which
+        pagination covers completely. `force=1` is REQUIRED (koscom shows a
+        landing page otherwise). `max_year` is a server-side PRE-FILTER only, NOT
         trusted for correctness — scrape_listing's client-side year gate stays
-        authoritative regardless of koscom's max_year semantics."""
-        return {"manuf": make, "max_year": cutoff, "force": 1}
+        authoritative. `min_year` is omitted by default (BROWSE_MIN_YEAR=None) so
+        there is no lower bound and pre-1990 eligible bikes are still returned."""
+        params = {"manuf": make, "chk_w13": "on", "max_year": cutoff, "force": 1}
+        if BROWSE_MIN_YEAR is not None:
+            params["min_year"] = BROWSE_MIN_YEAR
+        return params
 
     def browse_make_urls(self, make, cutoff):
         """Phase B: sweep a make's listings (koscom pre-filtered to <= cutoff);
