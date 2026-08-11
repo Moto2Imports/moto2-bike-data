@@ -217,7 +217,6 @@
     {
       "make": "Honda",
       "model": "VTR250",
-      "vin_prefix": "MC33",
       "vin_serial_max": {
         "prefix": "MC33",
         "max": 1010000
@@ -639,6 +638,16 @@
       "make": "Yamaha",
       "model": "SRX250-2",
       "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "Serow 225-1",
+      "engine_cc": 225
+    },
+    {
+      "make": "Yamaha",
+      "model": "Serow 225-2",
+      "engine_cc": 225
     }
   ],
   "browse_by_make": {
