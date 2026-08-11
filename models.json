@@ -179,6 +179,90 @@
       "engine_cc": 250
     },
     {
+      "make": "Honda",
+      "model": "FTR250",
+      "vin_prefix": "MD17",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "GB250 Clubman 1",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "GB250 Clubman 2",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "GB250 Clubman 3",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "GB250 Clubman 4",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "GB250 Clubman 5",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "SPADA",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "VTR250",
+      "vin_serial_max": {
+        "prefix": "MC33",
+        "max": 1010000
+      },
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "XLR250R-1",
+      "vin_prefix": "MD22",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "XLR250R-2",
+      "vin_prefix": "MD22",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "XLR250R-3",
+      "vin_prefix": "MD22",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "XLR250R-4",
+      "vin_prefix": "MD22",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "XLR250 BAJA",
+      "vin_prefix": "MD22",
+      "engine_cc": 250
+    },
+    {
+      "make": "Honda",
+      "model": "XR250",
+      "vin_serial_max": {
+        "prefix": "MD30",
+        "max": 1600000
+      },
+      "engine_cc": 250
+    },
+    {
       "make": "Kawasaki",
       "model": "ZXR400-1"
     },
@@ -539,6 +623,31 @@
       "model": "TZR250SPR",
       "display_name": "Yamaha TZR250 SPR",
       "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "TDR50",
+      "engine_cc": 50
+    },
+    {
+      "make": "Yamaha",
+      "model": "SRX250-1",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "SRX250-2",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
+      "model": "Serow 225-1",
+      "engine_cc": 225
+    },
+    {
+      "make": "Yamaha",
+      "model": "Serow 225-2",
+      "engine_cc": 225
     }
   ],
   "browse_by_make": {
