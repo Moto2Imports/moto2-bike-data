@@ -518,6 +518,11 @@
     },
     {
       "make": "Yamaha",
+      "model": "RZ250RR",
+      "engine_cc": 250
+    },
+    {
+      "make": "Yamaha",
       "model": "TDR80",
       "engine_cc": 80
     },
