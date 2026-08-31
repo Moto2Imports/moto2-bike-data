@@ -32,17 +32,7 @@
     },
     {
       "make": "Honda",
-      "model": "CRM250R-1",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
-      "model": "CRM250R-2",
-      "engine_cc": 250
-    },
-    {
-      "make": "Honda",
-      "model": "CRM250R-3",
+      "model": "CRM250R",
       "engine_cc": 250
     },
     {
