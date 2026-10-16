@@ -5,11 +5,14 @@ name: Daily auction scrape
 
 on:
   schedule:
-    # 09:00 UTC = 5am US Eastern (EDT) / 4am (EST) = ~18:00-19:00 JST. Runs near
+    # 09:17 UTC = ~5am US Eastern (EDT) / ~4am (EST) = ~18:00-19:00 JST. Runs near
     # the end of Japan's business day so the scrape captures listings BDS posts
     # or updates throughout the day, not just the morning. (Japan is UTC+9, i.e.
-    # 13-14h ahead of US Eastern depending on daylight saving.)
-    - cron: "0 9 * * *"
+    # 13-14h ahead of US Eastern depending on daylight saving.) The :17 minute is
+    # deliberately OFF the top of the hour: GitHub delays (and can drop) runs
+    # scheduled at :00 when the global queue spikes, so an odd minute starts on
+    # time far more reliably.
+    - cron: "17 9 * * *"
   workflow_dispatch: {}     # manual "Run workflow" button
 
 permissions:
@@ -17,7 +20,9 @@ permissions:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    # Pinned (not ubuntu-latest) so the Oct 19 2026 ubuntu-latest image change
+    # can't shift the runner under us without an explicit bump here.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -31,8 +36,16 @@ jobs:
         run: python koscom_scraper_v3.py
 
       - name: Match watchlist & draft outreach (no media in CI)
-        run: python watchlist_outreach.py --no-media
-        continue-on-error: true   # don't fail the data update if watchlist.json absent
+        # Skip cleanly when watchlist.json is absent (the usual case today), so
+        # this step stops "failing" on every run. continue-on-error stays as a
+        # backstop for any OTHER error, so the commit + site dispatch still run.
+        continue-on-error: true
+        run: |
+          if [ -f watchlist.json ]; then
+            python watchlist_outreach.py --no-media
+          else
+            echo "watchlist.json not present — skipping watchlist match/outreach."
+          fi
 
       - name: Commit updated data
         run: |
